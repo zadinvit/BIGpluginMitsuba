@@ -1,0 +1,246 @@
+\documentclass{article}
+
+%% The 'helvet' and 'times' packages define the typefaces used for
+%% serif and sans serif type in this document. Computer Modern Roman 
+%% is used for mathematics typesetting. The scale factor is set to .92
+%% to bring the sans-serif type in line with the serif type.
+
+\usepackage{helvet}
+\usepackage{times}
+
+%% The 'graphicx' package allows for the inclusion of EPS figures.
+
+\usepackage{graphicx}
+%\usepackage[draft]{graphicx}
+
+%% use this for zero \parindent and non-zero \parskip, intelligently.
+
+\usepackage{parskip}
+
+%% Optional: the 'caption' package provides a nicer-looking replacement
+%% for the standard caption environment. With 'labelfont=bf,'textfont=it',
+%% caption labels are bold and caption text is italic.
+
+%\usepackage[labelfont=bf,textfont=it]{caption}
+
+
+\usepackage{url}
+
+%% If you are submitting a paper to the annual conference, please replace 
+%% the value ``0'' below with the numeric value of your OnlineID. 
+%% If you are not submitting this paper to the annual conference, 
+%% you may safely leave it at ``0'' -- it will not be included in the output.
+
+%\usepackage{amssymb}
+\usepackage{amsmath}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+%\onlineid{}
+
+%% Paper title.
+
+\title{Big Image Group}
+
+\usepackage{cite}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+\usepackage{placeins}
+
+% Include other packages here, before hyperref.
+\newcommand{\MM}{\mathcal{M}}
+\newcommand{\NN}{\mathcal{N}}
+\newcommand{\XX}{\mathcal{X}}
+\newcommand{\KK}{\mathcal{K}}
+\newcommand{\II}{\mathcal{I}}
+\newcommand{\cc}{\mbox{\boldmath{c}}}
+\newcommand{\VS}{\mathcal{S}}
+\newcommand{\RR}{\mbox{$\cal R$}}
+\newcommand{\ZZ}{\mbox{$\cal Z$}}
+\newcommand{\xx}{\mbox{\boldmath$x$}}
+\newcommand{\yy}{\mbox{\boldmath$y$}}
+\newcommand{\zz}{\mbox{\boldmath$z$}}
+\newcommand{\bmu}{\mbox{\boldmath$\mu$}}
+\newcommand{\bxi}{\mbox{\boldmath$\xi$}}
+\newcommand{\bsigma}{\mbox{\boldmath$\sigma$}}
+
+\date{Version 3.0\\~\\Updated \today}
+\author{Radom\'\i r~V\'avra, Ji\v r\'\i~Filip,\\Michal~Havl\'\i\v cek, Libor~Bakajsa\\\\Institute of Information Theory and Automation of the CAS\\Czech Republic}
+
+%%%%%% START OF THE PAPER %%%%%%
+%------------------------------------------------------
+
+\begin{document}
+
+\maketitle
+
+\section{Overview}
+BIG is an open-source file format for storage of a group of high-dynamic-range floating-point high-quality images. This document defines the BIG format and explains concepts that are specific to this format.
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\section{Introduction}
+
+The BIG file format is indented to store many relevant images in one data file in order to speed up processing of the images, prevent loss of individual images, etc.
+
+\section{Definition}
+
+The data are stored in little-endian format. There is no compression of the data other than usage of up-to several types of arithmetic representations in order to allow fast random access to the data.
+
+The file starts with the magic number 42 49 47 00 00 00 00 00 hexa.
+
+Next, there are so-called chunks in arbitrary order.
+
+The stored data have to be in the form of \textit{nD} array, where \textit{n} is at most 4 in basic version. The format is not intended to store images with different dimensions. Only exception is possibility to use different data formats using index maps.
+
+\subsection{Chunk}
+
+\begin{figure}[!ht]
+\begin{center}
+%\begin{tabular}{c}
+  \includegraphics[width=1.0\columnwidth]{chunk}
+%\end{tabular}
+\end{center}
+\caption{\label{fig:chunk}Chunk.}
+\end{figure}
+
+
+
+Each chunk consists of three parts. Its length is always divisible by eight. Therefore starts of the individual chunks in a memory are 8-bytes aligned. Length of the first two parts of a chunk is 8 bytes each. Length of the third part depends on the type of the chunk.
+
+The first part of a chunk is its identifier according to Table~\ref{tab:chunks}. This part is 8 bytes long as it is unsigned 64-bit number.
+
+The second part of a chunk defines length of the third part in bytes and it is 8 bytes long. It might seems unnecessary to store length of the third part for chunks that store only single value (e.g., image width), however this concept enables to jump over redefined or unknown chunks when the BIG format was somehow extended in future releases.
+
+The third part of a chunk represents the stored data or meta data. Length of this part depends on the type of the chunk, however it is always divisible by eight. Therefore, the data might be padded with zeros to fulfill this requirement.
+
+\subsection{Types of Chunks}
+
+\begin{table}
+\caption{\label{tab:chunks}List of the data chunks.}
+\begin{center}
+\begin{tabular}{rlll}
+ID & Name & Data Type & Default Value \\
+\hline
+ 1 & number of images & unsigned 64-bit & 0\\
+ 2 & image height & unsigned 64-bit & 0\\
+ 3 & image width & unsigned 64-bit & 0\\
+ 4 & number of planes & unsigned 64-bit & 1\\
+
+ 5 & data order & unsigned 64-bit [ ] & 1 2 3 4\\
+
+ 6 & data type & unsigned 64-bit [ ] & 2\\
+
+ 7 & data & any [ ] & \\
+
+ 9 & color space & char [ ] & 0 \\
+10 & illuminant & char [ ] & 0 \\
+
+11 & ppmm & double & 0 \\
+
+12 & name & char [ ] & \\
+13 & text & char [ ] & \\
+14 & XML & char [ ] & \\
+15 & coordinates of tiles & double [ ] & \\
+16 & list of directions & unsigned 64-bit, double [ ] & \\
+%4671810 & magic number & unsigned 64-bit & 0\\
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Number of Images}
+The first chunk stores the number of images that are stored in the BIG data file.
+
+%\subsubsection{Number of Tiles}
+%Usually, a tile is meant to be a (possibly enhanced) sub-area of an image which has a periodic character. It means, that if we place several copies of a tile next to each other in both directions, we get bigger image without noticeable disturbances. From each image can be extracted arbitrary number of tiles. Only limitation is that all the tiles have to have the same dimensions. If this chunk is not present (or its value is set to default value explicitly), each image is assumed to be one (possibly not periodic) tile.
+%
+\subsubsection{Image Height}
+This chunk represents height of the stored images (tiles).
+
+\subsubsection{Image Width}
+This chunk represents width of the stored images (tiles).
+
+\subsubsection{Number of Planes}
+Through this chunk, the BIG file format enables to store gray-scale images, RGB color images, multi-spectral images, etc.
+
+\subsubsection{Data Order}
+Specifies order in which data are stored in the data chunk. Each possible order can be beneficial for some application. Therefore it is enabled to specify any data order by providing numbers of chunks according to how the data are stored. For example, in the default order \textit{1 2 3 4}, data are sored as follows. First, the outer most loop is over individual images. Then, we iterate over individual rows and the next loop iterates through individual pixels. The inner most loop iterates over image planes, finally accessing stored values.
+
+\subsubsection{Data Type(s)}
+This chunk defines data type(s) used in the data chunk according to Table~\ref{tab:datatypes}. If all data in the data chunk are of the same data type, we store only one number in this chunk. On the other hand, data can be of the different data types. Then, zero is stored in the first 64-bits of this chunk followed by data types of the outermost entities (e.g. images) of the format. Which entities are the outermost is given by the data order chunk. In default, the images are the outermost entities. Therefore, each image can have its own data type in default. If, e.g., image height is placed to the first position in the data order chunk, data type of each row can be specified by the data type(s) chunk.
+
+\begin{table}
+\caption{\label{tab:datatypes}Data types which can be stored in the data chunk.}
+\begin{center}
+\begin{tabular}{rlrl}
+ID & Name & No. of bits & Description \\
+\hline
+%0 & mixed & & data types specified by index map\\
+1 & half & 16-bit & floating point number according to IEEE 754 \\
+2 & float & 32-bit & floating point number according to IEEE 754 \\
+3 & double & 64-bit & floating point number according to IEEE 754 \\
+4 & signed char & 8-bit & signed integer \\
+5 & unsigned char & 8-bit & unsigned integer \\
+6 & short & 16-bit & signed integer \\
+7 & unsigned short & 16-bit & unsigned integer \\
+8 & int & 32-bit & signed integer \\
+9 & unsigned int & 32-bit & unsigned integer \\
+10 & long long & 64-bit & signed integer \\
+11 & unsigned long long & 64-bit & unsigned integer \\
+12 & bool & 1-bit & boolean value
+\end{tabular}
+\end{center}
+\end{table}
+% use int8_t, uint8_t, etc.
+
+\subsubsection{Data}
+
+\subsubsection{Color Space}
+This chunk (if applicable) together with illuminant defines color space of the data.
+
+\subsubsection{Illuminant}
+
+\subsubsection{Pixels per millimeter (ppmm)}
+
+\subsubsection{Name}
+
+\subsubsection{Text}
+
+\subsubsection{XML}
+
+\subsubsection{Coordinates of Tiles}
+
+\subsubsection{List of Directions}
+This chunk serves to store additional data for each image, particularly directions toward illumination and an observer in various parameterizations. This chunk is allowed to be defined several times in one file. First, there is stored unsigned 64-bit integer according to Table~\ref{tab:directions} indicating which list of directions is present in this chunk. Then, there are four double values for each image stored in the format.
+
+\begin{table}
+\caption{\label{tab:directions}List of Directions.}
+\begin{center}
+\begin{tabular}{rl}
+ID & Description \\
+\hline
+1 & ideal device angles \\
+2 & real device angles \\
+3 & ideal spherical angles \\
+4 & real spherical angles \\
+5 & ideal half-difference angles \\
+6 & real half-difference angles \\
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\section{Usage}
+
+\section{Extensions}
+
+\section{Credits}
+BIG file format was developed at Institute of Information Theory and Automation of the Czech Academy of Sciences, Czech Republic. This research has been supported by the Czech Science Foundation grant GA17-18407S.
+
+
+\end{document} %========================================================================
