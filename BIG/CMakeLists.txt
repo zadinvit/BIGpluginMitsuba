@@ -4,27 +4,27 @@ set(PROJECT_NAME big)
 # Source groups
 ################################################################################
 set(Header_Files
-    "include/big_cache.hpp"
-    "include/big_cache_read.hpp"
-    "include/big_consts.hpp"
-    "include/big_core_base.hpp"
-    "include/big_core_read.hpp"
-    "include/big_core_read_info.hpp"
-    "include/big_core_write.hpp"
-    "include/half.hpp"
-    "include/pugiconfig.hpp"
-    "include/pugixml.hpp"
+    "../../include/big_cache.hpp"
+    "../../include/big_cache_read.hpp"
+    "../../include/big_consts.hpp"
+    "../../include/big_core_base.hpp"
+    "../../include/big_core_read.hpp"
+    "../../include/big_core_read_info.hpp"
+    "../../include/big_core_write.hpp"
+    "../../include/half.hpp"
+    "../../include/pugiconfig.hpp"
+    "../../include/pugixml.hpp"
 )
 source_group("Header Files" FILES ${Header_Files})
 
 set(Source_Files
-    "src/big_cache.cpp"
-    "src/big_cache_read.cpp"
-    "src/big_core_base.cpp"
-    "src/big_core_read.cpp"
-    "src/big_core_read_info.cpp"
-    "src/big_core_write.cpp"
-    "src/pugixml.cpp"
+    "../../src/big_cache.cpp"
+    "../../src/big_cache_read.cpp"
+    "../../src/big_core_base.cpp"
+    "../../src/big_core_read.cpp"
+    "../../src/big_core_read_info.cpp"
+    "../../src/big_core_write.cpp"
+    "../../src/pugixml.cpp"
 )
 source_group("Source Files" FILES ${Source_Files})
 
@@ -38,7 +38,7 @@ set(ALL_FILES
 ################################################################################
 add_library(${PROJECT_NAME} STATIC ${ALL_FILES})
 
-#use_props(${PROJECT_NAME} "${CMAKE_CONFIGURATION_TYPES}" "${DEFAULT_CXX_PROPS}")
+use_props(${PROJECT_NAME} "${CMAKE_CONFIGURATION_TYPES}" "${DEFAULT_CXX_PROPS}")
 set(ROOT_NAMESPACE big)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -132,7 +132,6 @@ if(MSVC)
     if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
         target_link_options(${PROJECT_NAME} PRIVATE
             $<$<CONFIG:Debug>:
-                /DEBUG:FULL;
                 /SUBSYSTEM:WINDOWS
             >
             $<$<CONFIG:Release>:
@@ -165,11 +164,12 @@ endif()
 # Post build events
 ################################################################################
 if("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64")
-    add_custom_command(
+    add_custom_command_if(
         TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMANDS
         COMMAND   $<CONFIG:Debug> copy /Y "${OUTPUT_DIRECTORY}${TARGET_NAME}.lib" "$<SHELL_PATH:${CMAKE_SOURCE_DIR}/>..\\lib\\${TARGET_NAME}d.lib
-        COMMAND   $<CONFIG:Release> copy /Y "${OUTPUT_DIRECTORY}${TARGET_NAME}.lib" "$<SHELL_PATH:${CMAKE_SOURCE_DIR}/>..\\lib\\${TARGET_NAME}.lib
+        COMMAND $<CONFIG:Release> copy /Y "${OUTPUT_DIRECTORY}${TARGET_NAME}.lib" "$<SHELL_PATH:${CMAKE_SOURCE_DIR}/>..\\lib\\${TARGET_NAME}.lib
     )
 endif()
-
 

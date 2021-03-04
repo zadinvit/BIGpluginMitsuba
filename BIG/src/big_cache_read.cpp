@@ -155,7 +155,6 @@ namespace big
         entities_32.resize(entitySizes.size());
         entities_64.resize(entitySizes.size());
     }
-    BigCacheRead::~BigCacheRead(){}
     void BigCacheRead::load(std::ifstream &file, uint64_t & totalSize)
     {
         

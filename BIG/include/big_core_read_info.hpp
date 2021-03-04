@@ -1,10 +1,5 @@
 #pragma once
 #ifndef _BIG_CORE_READ_INFO_H_
-#ifdef _BIG_CORE_READ_INFO_H_
-#define BIGDLL  __declspec(dllexport)  
-#else
-#define BIGDLL  __declspec(dllimport)   
-#endif
 #define _BIG_CORE_READ_INFO_H_
 
 #include "big_core_base.hpp"
@@ -14,7 +9,7 @@
 namespace big
 {
 
-    class BIGDLL BigCoreReadInfo : public BigCoreBase
+    class BigCoreReadInfo : public BigCoreBase
     {
     public:
 

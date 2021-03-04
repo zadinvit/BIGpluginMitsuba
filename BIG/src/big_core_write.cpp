@@ -236,7 +236,7 @@ namespace big
     }
 
     //check if the file exist
-    bool BigCoreWrite::file_exist(const std::string& name) {
+    inline bool BigCoreWrite::file_exist(const std::string& name) {
       if (FILE *file = fopen(name.c_str(), "r")) {
         fclose(file);
         return true;

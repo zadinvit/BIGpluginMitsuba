@@ -1,10 +1,5 @@
 #pragma once
 #ifndef _BIG_CORE_READ_H_
-#ifdef  _BIG_CORE_READ_H_
-#define BIGDLL  __declspec(dllexport)  
-#else
-#define BIGDLL  __declspec(dllimport)   
-#endif
 #define _BIG_CORE_READ_H_
 
 #include "big_core_read_info.hpp"
@@ -18,7 +13,7 @@
 
 namespace big
 {
-    class BIGDLL BigCoreRead : public BigCoreReadInfo
+    class BigCoreRead : public BigCoreReadInfo
     {
     public:
 
@@ -90,7 +85,7 @@ namespace big
         uint64_t getCacheSize() { return cache.getSize(); }
 
         // Returns true if all data are in cache.
-        bool isAllInCache();
+        bool isAllInCache() { return cache.getSize() == dataSize; }
 
         //xml read atributes
         int readXMLInt(std::string nameOfNode);

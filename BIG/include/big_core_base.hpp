@@ -1,10 +1,5 @@
 #pragma once
 #ifndef _BIG_CORE_BASE_H_
-#ifdef _BIG_CORE_BASE_H_
-#define BIGDLL  __declspec(dllexport)  
-#else
-#define BIGDLL  __declspec(dllimport)   
-#endif
 #define _BIG_CORE_BASE_H_
 
 #include "big_consts.hpp"
@@ -17,12 +12,12 @@
 
 namespace big
 {
-    class BIGDLL BigCoreBase
+    class BigCoreBase
     {
     protected:
 
         // Default constructor.
-        BigCoreBase();
+        BigCoreBase() = default;
 
         // Copy constructor forbidden.
         BigCoreBase(const BigCoreBase &) = delete;
@@ -37,7 +32,7 @@ namespace big
         BigCoreBase &operator=(BigCoreBase &&rhs) = default;
 
         // Destructor.
-        ~BigCoreBase();
+        ~BigCoreBase() = default;
 
     public:
 

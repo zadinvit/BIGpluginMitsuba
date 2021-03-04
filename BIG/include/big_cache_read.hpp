@@ -1,10 +1,5 @@
 #pragma once
 #ifndef _BIG_CACHE_READ_H_
-#ifdef _BIG_CACHE_READ_H_
-#define BIGDLL  __declspec(dllexport)  
-#else
-#define BIGDLL  __declspec(dllimport)   
-#endif
 #define _BIG_CACHE_READ_H_
 
 #include "big_consts.hpp"
@@ -19,7 +14,7 @@
 namespace big
 {
 
-    class BIGDLL BigCacheRead
+    class BigCacheRead
     {
     private:
 
@@ -53,8 +48,6 @@ namespace big
 
         BigCacheRead(std::ifstream &file, std::vector<uint64_t> &entitySizes, std::vector<uint64_t> &dataPositions, std::vector<DataTypes> &dataTypes);
 
-        ~BigCacheRead();
-
         //set max cachce size
         void setSize(uint64_t maxSize);
 
@@ -86,7 +79,7 @@ namespace big
         T getElementFromMemory(uint64_t entityID, uint64_t index);
 
     private:
-        
+
         //coverts datatypes
         template<typename Tdst, typename Tsrc>
         Tdst convert(Tsrc value);

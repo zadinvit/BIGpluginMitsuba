@@ -1,10 +1,5 @@
 #pragma once
 #ifndef _BIG_CORE_WRITE_H_
-#ifdef _BIG_CORE_WRITE_H_
-#define BIGDLL  __declspec(dllexport)  
-#else
-#define BIGDLL  __declspec(dllimport)   
-#endif
 #define _BIG_CORE_WRITE_H_
 
 #include "big_core_base.hpp"
@@ -18,7 +13,7 @@
 
 namespace big
 {
-    class BIGDLL BigCoreWrite : public BigCoreBase
+    class BigCoreWrite : public BigCoreBase
     {
     public:
 
@@ -87,7 +82,7 @@ namespace big
         void createXMLFile();
 
         //check if file exist
-        bool file_exist(const std::string&name);
+        inline bool file_exist(const std::string&name);
 
       
 

@@ -19,7 +19,10 @@
 > to `target_link_libraries(mitsuba PRIVATE mitsuba-core mitsuba-render tbb **big**) //add big project to build with mitsuba`
 
 
-You can use https://mitsuba2.readthedocs.io/en/latest/generated/render_api.html#mitsuba.render.BSDFSample3f to generate newest cmakelist from BIG library (https://github.com/RadomirVavra/BIG), go to folder  vs"your visual code version"/big and copy CMakeLists.txt and copy all library files except vsxx and replace them in the BIG folder
+You can use https://mitsuba2.readthedocs.io/en/latest/generated/render_api.html#mitsuba.render.BSDFSample3f to generate newest cmakelist from BIG library (https://github.com/RadomirVavra/BIG), go to folder  vs"your visual code version"/big and copy CMakeLists.txt and copy all library files except vsxx and replace them in the BIG folder, in CMakeLists.txt generated in /big folder you must change paths to src a include files, comment use_props command in this file and delete all post build commands
 
 
-Documentation create by Vít Zadina 
+
+
+Documentation create by VÃ­t Zadina 
+
