@@ -16,7 +16,7 @@ private:
     big::BigCoreRead * bigR; //BIG read structure
 
 public:
-    BigRender(char *bigname, bool cache = false, int cache_size = 0);
+    BigRender(std::string, bool cache = false, int cache_size = 0);
     ~BigRender();
     //get pixel from BIG file
     void getPixel(int y, int x, float theta_i, float phi_i, float theta_v, float phi_v, float RGB[]);
@@ -24,7 +24,7 @@ public:
 };//--- RenderBIG -------------------------------------------------------
 
 
-BigRender::BigRender(char *bigname, bool cache, int cache_size) {
+BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
     printf("loading BIG...    \n");
     try {
         bigR = &big::BigCoreRead(bigname, cache, cache_size);
