@@ -4,6 +4,9 @@
 #include <mitsuba/render/bsdf.h>
 #include <mitsuba/render/texture.h>
 
+
+#include "big_render.cpp"
+
 NAMESPACE_BEGIN(mitsuba)
 
 
@@ -12,12 +15,12 @@ template <typename Float, typename Spectrum>
 class BigBTF final : public BSDF<Float, Spectrum> {
 public:
     MTS_IMPORT_BASE(BSDF, m_flags, m_components)
-    MTS_IMPORT_TYPES(Texture)
+        MTS_IMPORT_TYPES(Texture)
 
-    BigBTF(const Properties &props) : Base(props) {
+        BigBTF(const Properties& props) : Base(props) {
         int bsdf_index = 0;
-        for (auto &[name, obj] : props.objects(false)) {
-            auto *bsdf = dynamic_cast<Base *>(obj.get());
+        for (auto& [name, obj] : props.objects(false)) {
+            auto* bsdf = dynamic_cast<Base*>(obj.get());
             if (bsdf) {
                 if (bsdf_index == 2)
                     Throw(
@@ -25,6 +28,10 @@ public:
                 m_nested_bsdf[bsdf_index++] = bsdf;
                 props.mark_queried(name);
             }
+        }
+
+        {
+            BigRender::BigRender("test name", false, 0);
         }
 
         m_weight = props.texture<Texture>("weight");
@@ -40,18 +47,18 @@ public:
     }
 
     std::pair<BSDFSample3f, Spectrum>
-    sample(const BSDFContext &ctx, const SurfaceInteraction3f &si,
-           Float sample1, const Point2f &sample2, Mask active) const override {
+        sample(const BSDFContext& ctx, const SurfaceInteraction3f& si,
+            Float sample1, const Point2f& sample2, Mask active) const override {
         MTS_MASKED_FUNCTION(ProfilerPhase::BSDFSample, active);
 
         Float weight = eval_weight(si, active);
-        if (unlikely(ctx.component != (uint32_t) -1)) {
+        if (unlikely(ctx.component != (uint32_t)-1)) {
             bool sample_first =
                 ctx.component < m_nested_bsdf[0]->component_count();
             BSDFContext ctx2(ctx);
             if (!sample_first)
                 ctx2.component -=
-                    (uint32_t) m_nested_bsdf[0]->component_count();
+                (uint32_t)m_nested_bsdf[0]->component_count();
             else
                 weight = 1.f - weight;
             auto [bs, result] = m_nested_bsdf[sample_first ? 0 : 1]->sample(
@@ -68,68 +75,69 @@ public:
         if (any_or<true>(m0)) {
             auto [bs0, result0] = m_nested_bsdf[0]->sample(
                 ctx, si, (sample1 - weight) / (1 - weight), sample2, m0);
-            masked(bs, m0)     = bs0;
+            masked(bs, m0) = bs0;
             masked(result, m0) = result0;
         }
 
         if (any_or<true>(m1)) {
             auto [bs1, result1] = m_nested_bsdf[1]->sample(
                 ctx, si, sample1 / weight, sample2, m1);
-            masked(bs, m1)     = bs1;
+            masked(bs, m1) = bs1;
             masked(result, m1) = result1;
         }
 
         return { bs, result };
     }
 
-    Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
-                  const Vector3f &wo, Mask active) const override {
+
+    Spectrum eval(const BSDFContext& ctx, const SurfaceInteraction3f& si,
+        const Vector3f& wo, Mask active) const override {
         MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
 
         Float weight = eval_weight(si, active);
-        if (unlikely(ctx.component != (uint32_t) -1)) {
+        if (unlikely(ctx.component != (uint32_t)-1)) {
             bool sample_first =
                 ctx.component < m_nested_bsdf[0]->component_count();
             BSDFContext ctx2(ctx);
             if (!sample_first)
                 ctx2.component -=
-                    (uint32_t) m_nested_bsdf[0]->component_count();
+                (uint32_t)m_nested_bsdf[0]->component_count();
             else
                 weight = 1.f - weight;
             return weight * m_nested_bsdf[sample_first ? 0 : 1]->eval(
-                                ctx2, si, wo, active);
+                ctx2, si, wo, active);
         }
 
         return m_nested_bsdf[0]->eval(ctx, si, wo, active) * (1 - weight) +
-               m_nested_bsdf[1]->eval(ctx, si, wo, active) * weight;
+            m_nested_bsdf[1]->eval(ctx, si, wo, active) * weight;
     }
 
-    Float pdf(const BSDFContext &ctx, const SurfaceInteraction3f &si,
-              const Vector3f &wo, Mask active) const override {
+    Float pdf(const BSDFContext& ctx, const SurfaceInteraction3f& si,
+        const Vector3f& wo, Mask active) const override {
         MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
 
-        if (unlikely(ctx.component != (uint32_t) -1)) {
+        if (unlikely(ctx.component != (uint32_t)-1)) {
             bool sample_first =
                 ctx.component < m_nested_bsdf[0]->component_count();
             BSDFContext ctx2(ctx);
             if (!sample_first)
                 ctx2.component -=
-                    (uint32_t) m_nested_bsdf[0]->component_count();
+                (uint32_t)m_nested_bsdf[0]->component_count();
             return m_nested_bsdf[sample_first ? 0 : 1]->pdf(ctx2, si, wo,
-                                                            active);
+                active);
         }
 
         Float weight = eval_weight(si, active);
         return m_nested_bsdf[0]->pdf(ctx, si, wo, active) * (1 - weight) +
-               m_nested_bsdf[1]->pdf(ctx, si, wo, active) * weight;
+            m_nested_bsdf[1]->pdf(ctx, si, wo, active) * weight;
     }
 
-    MTS_INLINE Float eval_weight(const SurfaceInteraction3f &si,
-                                 const Mask &active) const {
+    MTS_INLINE Float eval_weight(const SurfaceInteraction3f& si,
+        const Mask& active) const {
         return clamp(m_weight->eval_1(si, active), 0.f, 1.f);
     }
 
-    void traverse(TraversalCallback *callback) override {
+    void traverse(TraversalCallback* callback) override {
         callback->put_object("weight", m_weight.get());
         callback->put_object("bsdf_0", m_nested_bsdf[0].get());
         callback->put_object("bsdf_1", m_nested_bsdf[1].get());
