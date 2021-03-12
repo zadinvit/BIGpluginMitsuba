@@ -4,6 +4,7 @@
 #include <mitsuba/render/bsdf.h>
 #include <mitsuba/render/texture.h>
 #include <mitsuba/core/logger.h>
+#include <mitsuba/core/warp.h>
 
 #include "big_render.cpp"
 #include <ostream>
@@ -17,11 +18,10 @@ template <typename Float, typename Spectrum>
 class BigBTF final : public BSDF<Float, Spectrum> {
 public:
     MTS_IMPORT_BASE(BSDF, m_flags, m_components)
-    MTS_IMPORT_TYPES(Texture)
 
     BigBTF(const Properties &props) : Base(props) {
         int bsdf_index = 0;
-        std::cout << "hello" << std::endl;
+        std::cout << "hello sd" << std::endl;
         Log(Info, "Start");
         for (auto &[name, obj] : props.objects(false)) {
             auto *bsdf = dynamic_cast<Base *>(obj.get());
@@ -35,89 +35,53 @@ public:
         }
         std::string filename = props.string("big_filepath");
         Log(Info, "Loading file \"%s\" ..", filename);
-        BigRender::BigRender(filename, false, 0);
+        big_render = new BigRender(filename, false, 0);
 
     }
 
     std::pair<BSDFSample3f, Spectrum>
     sample(const BSDFContext &ctx, const SurfaceInteraction3f &si,
            Float sample1, const Point2f &sample2, Mask active) const override {
-        MTS_MASKED_FUNCTION(ProfilerPhase::BSDFSample, active);
+        Log(Info, "sample");
+        Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0], si.uv[1]);
+        float cos_theta_i = Frame3f::cos_theta(si.wi);
+        Spectrum spect;
+        BSDFSample3f bs = BSDFSample3f();
+        if (!(active & BSDFFlags::DiffuseReflection) || cos_theta_i <= 0)
+            spect = Spectrum(0.0f);
+        else {
+            bs.wo                = warp::square_to_cosine_hemisphere(sample2);
+            bs.pdf               = warp::square_to_cosine_hemisphere_pdf(bs.wo);
+            bs.eta               = 1.0;
+            bs.sampled_type      = +BSDFFlags::DiffuseReflection;
+            bs.sampled_component = 0;
+            float_t r2d          = 180.0 / M_PI;
+            float_t theta_i      = r2d * acos(float_t(si.wi[2]));
+            float_t theta_o      = r2d * acos(bs.wo[2]);
+            float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
+            float_t phi_o        = r2d * atan2(bs.wo[1], bs.wo[0]);
+            float *RGB;
+            big_render->getPixel(
+                si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
+                RGB); // get RGB value from BIG file,  UV coordinate
+            spect = M_PI * Color3f(RGB[0], RGB[1], RGB[2]);
+        }
         
-        Float weight = 0.5f;
-        if (unlikely(ctx.component != (uint32_t) -1)) {
-            bool sample_first =
-                ctx.component < m_nested_bsdf[0]->component_count();
-            BSDFContext ctx2(ctx);
-            if (!sample_first)
-                ctx2.component -=
-                    (uint32_t) m_nested_bsdf[0]->component_count();
-            else
-                weight = 1.f - weight;
-            auto [bs, result] = m_nested_bsdf[sample_first ? 0 : 1]->sample(
-                ctx2, si, sample1, sample2, active);
-            result *= weight;
-            return { bs, result };
-        }
-
-        BSDFSample3f bs = zero<BSDFSample3f>();
-        Spectrum result(0.f);
-
-        Mask m0 = active && sample1 > weight, m1 = active && sample1 <= weight;
-
-        if (any_or<true>(m0)) {
-            auto [bs0, result0] = m_nested_bsdf[0]->sample(
-                ctx, si, (sample1 - weight) / (1 - weight), sample2, m0);
-            masked(bs, m0)     = bs0;
-            masked(result, m0) = result0;
-        }
-
-        if (any_or<true>(m1)) {
-            auto [bs1, result1] = m_nested_bsdf[1]->sample(
-                ctx, si, sample1 / weight, sample2, m1);
-            masked(bs, m1)     = bs1;
-            masked(result, m1) = result1;
-        }
-
-        return { bs, result };
+        return { bs, spect }; // 
     }
 
 
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
                   const Vector3f &wo, Mask active) const override {
-        MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
-
-        Float weight = 0.5f;
-        if (unlikely(ctx.component != (uint32_t) -1)) {
-            bool sample_first =
-                ctx.component < m_nested_bsdf[0]->component_count();
-            BSDFContext ctx2(ctx);
-            if (!sample_first)
-                ctx2.component -=
-                    (uint32_t) m_nested_bsdf[0]->component_count();
-            else
-                weight = 1.f - weight;
-            return weight * m_nested_bsdf[sample_first ? 0 : 1]->eval(
-                                ctx2, si, wo, active);
-        }
-
-        return m_nested_bsdf[0]->eval(ctx, si, wo, active) * (1 - weight) +
-               m_nested_bsdf[1]->eval(ctx, si, wo, active) * weight;
+      
+        return Spectrum(0.0f);
     }
 
     Float pdf(const BSDFContext &ctx, const SurfaceInteraction3f &si,
               const Vector3f &wo, Mask active) const override {
         MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
-        if (unlikely(ctx.component != (uint32_t) -1)) {
-            bool sample_first =
-                ctx.component < m_nested_bsdf[0]->component_count();
-            BSDFContext ctx2(ctx);
-            if (!sample_first)
-                ctx2.component -=
-                    (uint32_t) m_nested_bsdf[0]->component_count();
-            return m_nested_bsdf[sample_first ? 0 : 1]->pdf(ctx2, si, wo,
-                                                            active);
-        }
+        Log(Info, "pdf");
+        
         return 0;
     }
 
@@ -141,6 +105,7 @@ public:
     MTS_DECLARE_CLASS()
 protected:
     ref<Base> m_nested_bsdf[2];
+    BigRender *big_render;
 };
 
 MTS_IMPLEMENT_CLASS_VARIANT(BigBTF, BSDF)

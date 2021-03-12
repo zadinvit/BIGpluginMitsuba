@@ -2,6 +2,7 @@
 #include <math.h>
 
 #include "big_core_read.hpp"
+
 class BigRender
 {
 private:
