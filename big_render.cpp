@@ -67,6 +67,8 @@ BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
 BigRender::~BigRender() {
 }//--- ~RenderBIG --------------------------------------------------
 
+
+//need to rework y,x are float we need recompute size base on texture image size
 void BigRender::getPixel(int y, int x, float theta_i, float phi_i,
                          float theta_v, float phi_v, float RGB[]) {
     float theta_i_BKP = theta_i;

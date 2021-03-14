@@ -38,7 +38,7 @@ public:
         big_render = new BigRender(filename, false, 0);
 
     }
-
+    // nejdùležitìjší funkce, volá se vždy a urèuje další postup renderigngu
     std::pair<BSDFSample3f, Spectrum>
     sample(const BSDFContext &ctx, const SurfaceInteraction3f &si,
            Float sample1, const Point2f &sample2, Mask active) const override {
@@ -47,7 +47,8 @@ public:
         float cos_theta_i = Frame3f::cos_theta(si.wi);
         Spectrum spect;
         BSDFSample3f bs = BSDFSample3f();
-        if (!(active & BSDFFlags::DiffuseReflection) || cos_theta_i <= 0)
+        // !ctx.is_enabled(BSDFFlags::DiffuseReflection) newest version off!(active & BSDFFlags::DiffuseReflection)
+        if (!ctx.is_enabled(BSDFFlags::DiffuseReflection) || cos_theta_i <= 0)
             spect = Spectrum(0.0f);
         else {
             bs.wo                = warp::square_to_cosine_hemisphere(sample2);
@@ -56,33 +57,57 @@ public:
             bs.sampled_type      = +BSDFFlags::DiffuseReflection;
             bs.sampled_component = 0;
             float_t r2d          = 180.0 / M_PI;
-            float_t theta_i      = r2d * acos(float_t(si.wi[2]));
+            float_t theta_i      = r2d * acos(si.wi[2]);
             float_t theta_o      = r2d * acos(bs.wo[2]);
             float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
             float_t phi_o        = r2d * atan2(bs.wo[1], bs.wo[0]);
             float *RGB;
             big_render->getPixel(
                 si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
-                RGB); // get RGB value from BIG file,  UV coordinate
-            spect = M_PI * Color3f(RGB[0], RGB[1], RGB[2]);
+                RGB); // get RGB value from BIG file,  UV coordinate 
+            spect = M_PI * Color3f(RGB[0], RGB[1], RGB[2]); // /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
         }
         
         return { bs, spect }; // 
     }
 
-
+    //Evaluate the BSDF f(wi, wo) or its adjoint version f ^{ * }(wi, wo) and multiply by the cosine foreshortening term.
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
                   const Vector3f &wo, Mask active) const override {
-      
-        return Spectrum(0.0f);
+        float cos_theta_i = Frame3f::cos_theta(si.wi);
+        float cos_theta_o = Frame3f::cos_theta(wo);
+        Spectrum spect;
+        // !ctx.is_enabled(BSDFFlags::DiffuseReflection) newest version off !(active & BSDFFlags::DiffuseReflection)
+        if (!ctx.is_enabled(BSDFFlags::DiffuseReflection) || cos_theta_i <= 0 ||
+            cos_theta_o <= 0)
+            spect = Spectrum(0.0f);
+        else {
+            float_t r2d          = 180.0 / M_PI;
+            float_t theta_i      = r2d * acos(si.wi[2]);
+            float_t theta_o      = r2d * acos(wo[2]);
+            float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
+            float_t phi_o        = r2d * atan2(wo[1], bs.wo[0]);
+            float *RGB;
+            big_render->getPixel(
+                si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
+                RGB); // get RGB value from BIG file,  UV coordinate
+            spect = Color3f(RGB[0], RGB[1], RGB[2]) * math::InvPi<float>; //*cos_theta_o cosine term. 
+            M_PI
+        }
+        return spect;
     }
 
+    //Compute the probability per unit solid angle of sampling a given direction
     Float pdf(const BSDFContext &ctx, const SurfaceInteraction3f &si,
               const Vector3f &wo, Mask active) const override {
-        MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
-        Log(Info, "pdf");
+        float cos_theta_i = Frame3f::cos_theta(si.wi);
+        float cos_theta_o = Frame3f::cos_theta(wo);
+        //!ctx.is_enabled(BSDFFlags::DiffuseReflection) newest version off !(active & BSDFFlags::DiffuseReflection)
+        if (!ctx.is_enabled(BSDFFlags::DiffuseReflection) || cos_theta_i <= 0 ||
+            cos_theta_o <= 0)
+            return 0.0f;
         
-        return 0;
+        return warp::squareToCosineHemispherePdf(wo);
     }
 
 
