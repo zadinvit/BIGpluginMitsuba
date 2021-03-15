@@ -86,13 +86,12 @@ public:
             float_t theta_i      = r2d * acos(si.wi[2]);
             float_t theta_o      = r2d * acos(wo[2]);
             float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
-            float_t phi_o        = r2d * atan2(wo[1], bs.wo[0]);
+            float_t phi_o        = r2d * atan2(wo[1], wo[0]);
             float *RGB;
             big_render->getPixel(
                 si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
                 RGB); // get RGB value from BIG file,  UV coordinate
             spect = Color3f(RGB[0], RGB[1], RGB[2]) * math::InvPi<float>; //*cos_theta_o cosine term. 
-            M_PI
         }
         return spect;
     }
@@ -107,7 +106,7 @@ public:
             cos_theta_o <= 0)
             return 0.0f;
         
-        return warp::squareToCosineHemispherePdf(wo);
+            return warp::square_to_cosine_hemisphere_pdf(wo);
     }
 
 
