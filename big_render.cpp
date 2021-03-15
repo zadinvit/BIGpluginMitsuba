@@ -57,9 +57,9 @@ BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
     this->nti = 6;
     this->step_t = 15.f;
     this->step_p = 30.f;
-    this->np = (int)(360.f / step_p);
-    this->ni = 1 + np * (nti - 1);
-    this->nv = np * ntv;
+    this->np = (int)(360.f / step_p);//kroky na otoèku
+    this->ni = 1 + np * (nti - 1);//množství smìrù osvìtlení 
+    this->nv = np * ntv;//pro kamery
     this->r2d = 180.f / M_PI;
 
 }//--- RenderBIG --------------------------------------------------
@@ -80,8 +80,8 @@ void BigRender::getPixel(int y, int x, float theta_i, float phi_i,
     phi_i *= r2d;
     phi_v *= r2d;
 
-    int iti[2] = { 0,0 }, itv[2] = { 0,0 }, ipi[2] = { 0,0 }, ipv[2] = { 0,0 };
-    float wti[2] = { 0.f,0.f }, wtv[2] = { 0.f,0.f }, wpi[2] = { 0.f,0.f }, wpv[2] = { 0.f,0.f };
+    int iti[2] = { 0,0 }, itv[2] = { 0,0 }, ipi[2] = { 0,0 }, ipv[2] = { 0,0 };//dva nejbližší indexy mezi úhly
+    float wti[2] = { 0.f,0.f }, wtv[2] = { 0.f,0.f }, wpi[2] = { 0.f,0.f }, wpv[2] = { 0.f,0.f };  //váhy mezi dvìma indexy
     float sum;
 
     iti[0] = (int)(floor(theta_i / step_t));
@@ -167,7 +167,7 @@ void BigRender::getPixel(int y, int x, float theta_i, float phi_i,
 
                     for (int isp = 0; isp < planes; isp++)
                     {
-                        aux[isp] *= wti[i] * wtv[j] * wpi[k] * wpv[l];
+                        aux[isp] *= wti[i] * wtv[j] * wpi[k] * wpv[l];//pøidání na základì vaha (váhy 0...1) váhy všechy ètyø smìrù
                         RGB[isp] += aux[isp];
                     }
 
