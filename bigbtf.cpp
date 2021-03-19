@@ -42,14 +42,16 @@ public:
     std::pair<BSDFSample3f, Spectrum>
     sample(const BSDFContext &ctx, const SurfaceInteraction3f &si,
            Float sample1, const Point2f &sample2, Mask active) const override {
-        Log(Info, "sample");
-        Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0], si.uv[1]);
+        
+        //Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0], si.uv[1]);
         float cos_theta_i = Frame3f::cos_theta(si.wi);
         Spectrum spect;
         BSDFSample3f bs = BSDFSample3f();
         // !ctx.is_enabled(BSDFFlags::DiffuseReflection) newest version off!(active & BSDFFlags::DiffuseReflection)
-        if (!ctx.is_enabled(BSDFFlags::DiffuseReflection) || cos_theta_i <= 0)
+        if (!ctx.is_enabled(BSDFFlags::DiffuseReflection) || cos_theta_i <= 0) {
+            Log(Info, "No diffuse reflection! Add diffuse reflection flag to your scene!");
             spect = Spectrum(0.0f);
+        }
         else {
             bs.wo                = warp::square_to_cosine_hemisphere(sample2);
             bs.pdf               = warp::square_to_cosine_hemisphere_pdf(bs.wo);
@@ -57,11 +59,17 @@ public:
             bs.sampled_type      = +BSDFFlags::DiffuseReflection;
             bs.sampled_component = 0;
             float_t r2d          = 180.0 / M_PI;
-            float_t theta_i      = r2d * acos(si.wi[2]);
-            float_t theta_o      = r2d * acos(bs.wo[2]);
-            float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
-            float_t phi_o        = r2d * atan2(bs.wo[1], bs.wo[0]);
-            float *RGB;
+            float_t theta_i      = r2d * acos(bs.wo[2]);
+            float_t theta_o      = r2d * acos(si.wi[2]);
+            float_t phi_i        = r2d * atan2(bs.wo[1], bs.wo[0]);
+            float_t phi_o        = r2d * atan2(si.wi[1], si.wi[0]);
+            // make sure phi is in [0, 360)
+            while (phi_i < 0.0) {phi_i += 360.0;}
+            while (phi_o < 0.0) {phi_o += 360.0;}
+            while (phi_i >= 360) {phi_i -= 360.0;}
+            while (phi_o >= 360) {phi_o -= 360.0;}
+            float RGB[3];
+            Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0], si.uv[1]);
             big_render->getPixel(
                 si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
                 RGB); // get RGB value from BIG file,  UV coordinate 

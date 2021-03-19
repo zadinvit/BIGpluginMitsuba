@@ -20,7 +20,10 @@ public:
     BigRender(std::string, bool cache = false, int cache_size = 0);
     ~BigRender();
     //get pixel from BIG file
-    void getPixel(int y, int x, float theta_i, float phi_i, float theta_v, float phi_v, float RGB[]);
+    void getPixel(float u, float v, float theta_i, float phi_i, float theta_v, float phi_v, float RGB[]);
+
+    //convert float XYZ in XYZ retrun RGB values
+    void XYZ2sRGB(float XYZ[], float scale[]);
 
 };//--- RenderBIG -------------------------------------------------------
 
@@ -28,7 +31,7 @@ public:
 BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
     printf("loading BIG...    \n");
     try {
-        bigR = &big::BigCoreRead(bigname, cache, cache_size);
+        bigR = new big::BigCoreRead(bigname, cache, cache_size);
     } catch (const char *msg) {
         std::cout << msg << std::endl;
     }
@@ -65,20 +68,59 @@ BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
 }//--- RenderBIG --------------------------------------------------
 
 BigRender::~BigRender() {
+    delete bigR;
 }//--- ~RenderBIG --------------------------------------------------
+
+void BigRender::XYZ2sRGB(float XYZ[], float scale[]) {
+    /*! \brief Conversion from CIE XYZ colour space into RGB
+      for Observer. = 2degree, Illuminant = D65 */
+
+    float M_XYZ2sRGB[] = { 3.2405, -1.5371, -0.4985, -0.9693, 1.8760,
+                           0.0416, 0.0556,  -0.2040, 1.0572 };
+
+    float gamma = 0.42, f = 0.055, s = 12.92, t = 0.003, X, Y, Z, R,G,B;
+
+    XYZ[0] *= scale[0];
+    XYZ[1] *= scale[1];
+    XYZ[2] *= scale[2];
+
+    R = M_XYZ2sRGB[0] * XYZ[0] + M_XYZ2sRGB[1] * XYZ[1] + M_XYZ2sRGB[2] * XYZ[2];
+    G = M_XYZ2sRGB[3] * XYZ[0] + M_XYZ2sRGB[4] * XYZ[1] + M_XYZ2sRGB[5] * XYZ[2];
+    B = M_XYZ2sRGB[6] * XYZ[0] + M_XYZ2sRGB[7] * XYZ[1] + M_XYZ2sRGB[8] * XYZ[2];
+
+    R = 0.01 * R;
+    if (R < t)
+        R = s * R;
+    else
+        R = (1 + f) * pow(R, gamma) - f;
+    XYZ[0] = R;
+    G  = 0.01 * G;
+    if (G < t)
+        G = s * G;
+    else
+        G = (1 + f) * pow(G, gamma) - f;
+    XYZ[1] = G;
+    B  = 0.01 * B;
+    if (B < t)
+        B = s * B;
+    else
+        B = (1 + f) * pow(B, gamma) - f;
+    XYZ[2] = B;
+}
+
 
 
 //need to rework y,x are float we need recompute size base on texture image size
-void BigRender::getPixel(int y, int x, float theta_i, float phi_i,
+void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
                          float theta_v, float phi_v, float RGB[]) {
     float theta_i_BKP = theta_i;
     float theta_v_BKP = theta_v;
     float phi_i_BKP = phi_i;
     float phi_v_BKP = phi_v;
-    theta_i *= r2d;
-    theta_v *= r2d;
-    phi_i *= r2d;
-    phi_v *= r2d;
+    //theta_i *= r2d;
+    //theta_v *= r2d;
+    //phi_i *= r2d;
+    //phi_v *= r2d;
 
     int iti[2] = { 0,0 }, itv[2] = { 0,0 }, ipi[2] = { 0,0 }, ipv[2] = { 0,0 };//dva nejbližší indexy mezi úhly
     float wti[2] = { 0.f,0.f }, wtv[2] = { 0.f,0.f }, wpi[2] = { 0.f,0.f }, wpv[2] = { 0.f,0.f };  //váhy mezi dvìma indexy
@@ -144,8 +186,11 @@ void BigRender::getPixel(int y, int x, float theta_i, float phi_i,
         ipv[1] = 0;
 
     // compute texture mapping
-    int irow = y % nr;
-    int jcol = x % nc;
+    //int irow = y % nr;
+    //int jcol = x % nc;
+    int texture_scale    = 2;
+    int irow = (int) (floor(u * (float) nr * texture_scale)) % nr;
+    int jcol = (int) (floor(v * (float) nc * texture_scale)) % nc;
 
     float aux[3];
     for (int isp = 0; isp < planes; isp++)
@@ -161,10 +206,16 @@ void BigRender::getPixel(int y, int x, float theta_i, float phi_i,
                     if (iti[i] == 0)
                         idx = idxCam;
                     else
-                        idx = idxCam + 1 + np * (iti[i] - 1) + ipi[k];
-
+                        idx = idxCam + 1 + np * (iti[i] - 1) + ipi[k];      
+                    try {
+                        aux[0] = bigR->at<float>(idx, irow, jcol, 0);
+                        aux[1] = bigR->at<float>(idx, irow, jcol, 1);
+                        aux[2] = bigR->at<float>(idx, irow, jcol, 2);
+                    } catch (const char *str) {
+                        std::cout << "read exception: " << str<< std::endl;
+                    }
+                    
                     //get_pixel(0, irow, jcol, idx, aux); // zde je treba zavolat funkci co mi da hodnotu pixelu pro obrazek s indexem idx
-
                     for (int isp = 0; isp < planes; isp++)
                     {
                         aux[isp] *= wti[i] * wtv[j] * wpi[k] * wpv[l];//pøidání na základì vaha (váhy 0...1) váhy všechy ètyø smìrù
@@ -172,6 +223,9 @@ void BigRender::getPixel(int y, int x, float theta_i, float phi_i,
                     }
 
                 }
+
+    float scale[3] = { 1.0f, 1.0f, 1.0f };
+    XYZ2sRGB(RGB, scale);
 
     // attenuation below elev. 75 deg. ----------------------               
     float thLim = 1.3089969389957471826927680763665; //75.f*(PI/180.f)
