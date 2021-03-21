@@ -188,9 +188,11 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
     // compute texture mapping
     //int irow = y % nr;
     //int jcol = x % nc;
-    int texture_scale    = 2;
+    int texture_scale    = 10;
     int irow = (int) (floor(u * (float) nr * texture_scale)) % nr;
     int jcol = (int) (floor(v * (float) nc * texture_scale)) % nc;
+    //int irow = (int) floor(v * (float) nr);
+    //int jcol = (int) floor(u * (float) nc);
 
     float aux[3];
     for (int isp = 0; isp < planes; isp++)
@@ -226,14 +228,17 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
 
     float scale[3] = { 1.0f, 1.0f, 1.0f };
     XYZ2sRGB(RGB, scale);
+    /*RGB[0] *= 255.0f;
+    RGB[1] *= 255.0f;
+    RGB[2] *= 255.0f;*/
 
     // attenuation below elev. 75 deg. ----------------------               
-    float thLim = 1.3089969389957471826927680763665; //75.f*(PI/180.f)
-    float cosThLim = cos(thLim);
-    if (theta_i_BKP > thLim)
-    {
-        for (int isp = 0; isp < 3; isp++)
-            RGB[isp] *= cos(theta_i_BKP) / cosThLim;
-    }
+    //float thLim = 1.3089969389957471826927680763665; //75.f*(PI/180.f)
+    //float cosThLim = cos(thLim);
+    //if (theta_i_BKP > thLim)
+    //{
+    //    for (int isp = 0; isp < 3; isp++)
+    //        RGB[isp] *= cos(theta_i_BKP) / cosThLim;
+    //}
     return;
 }

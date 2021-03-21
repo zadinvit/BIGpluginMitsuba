@@ -36,6 +36,8 @@ public:
         std::string filename = props.string("big_filepath");
         Log(Info, "Loading file \"%s\" ..", filename);
         big_render = new BigRender(filename, false, 0);
+        m_flags    = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide;
+        m_components.push_back(m_flags);
 
     }
     // nejdùležitìjší funkce, volá se vždy a urèuje další postup renderigngu
@@ -55,31 +57,43 @@ public:
         else {
             bs.wo                = warp::square_to_cosine_hemisphere(sample2);
             bs.pdf               = warp::square_to_cosine_hemisphere_pdf(bs.wo);
-            bs.eta               = 1.0;
-            bs.sampled_type      = +BSDFFlags::DiffuseReflection;
-            bs.sampled_component = 0;
-            float_t r2d          = 180.0 / M_PI;
-            float_t theta_i      = r2d * acos(bs.wo[2]);
-            float_t theta_o      = r2d * acos(si.wi[2]);
-            float_t phi_i        = r2d * atan2(bs.wo[1], bs.wo[0]);
-            float_t phi_o        = r2d * atan2(si.wi[1], si.wi[0]);
-            // make sure phi is in [0, 360)
-            while (phi_i < 0.0) {phi_i += 360.0;}
-            while (phi_o < 0.0) {phi_o += 360.0;}
-            while (phi_i >= 360) {phi_i -= 360.0;}
-            while (phi_o >= 360) {phi_o -= 360.0;}
-            float RGB[3];
-            Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0], si.uv[1]);
-            big_render->getPixel(
-                si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
-                RGB); // get RGB value from BIG file,  UV coordinate 
-            spect = M_PI * Color3f(RGB[0], RGB[1], RGB[2]); // /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
+            if (bs.pdf > 0.0f) {
+
+                bs.eta               = 1.0f;
+                bs.sampled_type      = +BSDFFlags::DiffuseReflection;
+                bs.sampled_component = 0;
+                float_t r2d          = 180.0 / M_PI;
+                float_t theta_o      = r2d * acos(bs.wo[2]);
+                float_t theta_i      = r2d * acos(si.wi[2]);
+                float_t phi_o        = r2d * atan2(bs.wo[1], bs.wo[0]);
+                float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
+                // make sure phi is in [0, 360)
+                while (phi_i < 0.0) {
+                    phi_i += 360.0;
+                }
+                while (phi_o < 0.0) {
+                    phi_o += 360.0;
+                }
+                while (phi_i >= 360) {
+                    phi_i -= 360.0;
+                }
+                while (phi_o >= 360) {
+                    phi_o -= 360.0;
+                }
+                float RGB[3];
+                // Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0],
+                // si.uv[1]);
+                big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,  RGB); // get RGB value from BIG file,  UV coordinate
+                spect =  Color3f(RGB[0], RGB[1],RGB[2]); //M_PI *  / Frame3f::cos_theta(bs.wo)* M_PI /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
+            }
+          
         }
-        
+       
         return { bs, spect }; // 
     }
 
     //Evaluate the BSDF f(wi, wo) or its adjoint version f ^{ * }(wi, wo) and multiply by the cosine foreshortening term.
+    //emitter sampling
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
                   const Vector3f &wo, Mask active) const override {
         float cos_theta_i = Frame3f::cos_theta(si.wi);
@@ -95,11 +109,15 @@ public:
             float_t theta_o      = r2d * acos(wo[2]);
             float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
             float_t phi_o        = r2d * atan2(wo[1], wo[0]);
-            float *RGB;
+            while (phi_i < 0.0) { phi_i += 360.0; }
+            while (phi_o < 0.0) {phi_o += 360.0;}
+            while (phi_i >= 360) {phi_i -= 360.0;}
+            while (phi_o >= 360) {phi_o -= 360.0;}
+            float RGB[3];
             big_render->getPixel(
                 si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
                 RGB); // get RGB value from BIG file,  UV coordinate
-            spect = Color3f(RGB[0], RGB[1], RGB[2]) * math::InvPi<float>; //*cos_theta_o cosine term. 
+            spect = Color3f(RGB[0], RGB[1], RGB[2]) * math::InvPi<float>; //  * cos_theta_o cosine term. 
         }
         return spect;
     }
