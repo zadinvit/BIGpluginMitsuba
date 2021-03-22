@@ -81,6 +81,13 @@ void BigRender::clampToZero(float array[], int size) {
     }
 }
 
+float adj(float c) {
+    if (abs(c) < 0.0031308) {
+        return 12.92 * c;
+    }
+    return 1.055 * pow(c, 0.41666) - 0.055;
+}
+
 void BigRender::XYZ2sRGB(float XYZ[], float scale[]) {
     /*! \brief Conversion from CIE XYZ colour space into RGB
       for Observer. = 2degree, Illuminant = D65 */
@@ -90,32 +97,37 @@ void BigRender::XYZ2sRGB(float XYZ[], float scale[]) {
 
     float gamma = 0.42, f = 0.055, s = 12.92, t = 0.003, X, Y, Z, R,G,B;
 
-    XYZ[0] *= scale[0];
-    XYZ[1] *= scale[1];
-    XYZ[2] *= scale[2];
+    XYZ[0] *= scale[0] * 0.01;
+    XYZ[1] *= scale[1] * 0.01;;
+    XYZ[2] *= scale[2] * 0.01;;
 
     R = M_XYZ2sRGB[0] * XYZ[0] + M_XYZ2sRGB[1] * XYZ[1] + M_XYZ2sRGB[2] * XYZ[2];
     G = M_XYZ2sRGB[3] * XYZ[0] + M_XYZ2sRGB[4] * XYZ[1] + M_XYZ2sRGB[5] * XYZ[2];
     B = M_XYZ2sRGB[6] * XYZ[0] + M_XYZ2sRGB[7] * XYZ[1] + M_XYZ2sRGB[8] * XYZ[2];
+ /*   R = 3.2404542 * XYZ[0] - 1.5371385 * XYZ[1] - 0.4985314 * XYZ[2];
+    G = -0.9692660 * XYZ[0] + 1.8760108 * XYZ[1] + 0.0415560 * XYZ[2];
+    B = 0.0556434 * XYZ[0] - 0.2040259 * XYZ[1] + 1.0572252 * XYZ[2];*/
 
-    R = 0.01 * R;
+    //R = 0.01 * R;
     if (R < t)
         R = s * R;
     else
         R = (1 + f) * pow(R, gamma) - f;
-    XYZ[0] = R;
-    G  = 0.01 * G;
+    
+   // G  = 0.01 * G;
     if (G < t)
         G = s * G;
     else
         G = (1 + f) * pow(G, gamma) - f;
-    XYZ[1] = G;
-    B  = 0.01 * B;
+    
+    //B  = 0.01 * B;
     if (B < t)
         B = s * B;
     else
         B = (1 + f) * pow(B, gamma) - f;
-    XYZ[2] = B;
+  /*  XYZ[0] = adj(R);
+    XYZ[1] = adj(G);
+    XYZ[2] = adj(B);*/
 }
 
 
@@ -123,14 +135,20 @@ void BigRender::XYZ2sRGB(float XYZ[], float scale[]) {
 //need to rework y,x are float we need recompute size base on texture image size
 void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
                          float theta_v, float phi_v, float RGB[]) {
-    float theta_i_BKP = theta_i;
-    float theta_v_BKP = theta_v;
-    float phi_i_BKP = phi_i;
-    float phi_v_BKP = phi_v;
-    //theta_i *= r2d;
-    //theta_v *= r2d;
-    //phi_i *= r2d;
-    //phi_v *= r2d;
+   /* u = 0.f;
+    v = 0.f;
+    theta_i = 15.f / r2d;
+    phi_i = 0.f / r2d;
+    theta_v = 30.f / r2d;
+    phi_v = 180.f / r2d;*/
+    float theta_i_BKP = theta_i/ r2d;
+    float theta_v_BKP = theta_v/ r2d;
+    float phi_i_BKP = phi_i/ r2d;
+    float phi_v_BKP = phi_v/ r2d;
+    /*theta_i *= r2d;
+    theta_v *= r2d;
+    phi_i *= r2d;
+    phi_v *= r2d;*/
 
     int iti[2] = { 0,0 }, itv[2] = { 0,0 }, ipi[2] = { 0,0 }, ipv[2] = { 0,0 };//dva nejbližší indexy mezi úhly
     float wti[2] = { 0.f,0.f }, wtv[2] = { 0.f,0.f }, wpi[2] = { 0.f,0.f }, wpv[2] = { 0.f,0.f };  //váhy mezi dvìma indexy
@@ -198,7 +216,7 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
     // compute texture mapping
     //int irow = y % nr;
     //int jcol = x % nc;
-    int texture_scale    = 10;
+    int texture_scale    = 7;
     int irow = (int) (floor(u * (float) nr * texture_scale)) % nr;
     int jcol = (int) (floor(v * (float) nc * texture_scale)) % nc;
     //int irow = (int) floor(v * (float) nr);
@@ -238,12 +256,7 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
     //clamp XYZ values
     clampToZero(RGB,3);
     float scale[3] = { 1.0f, 1.0f, 1.0f };
-    XYZ2sRGB(RGB, scale);
-    /*RGB[0] *= 255.0f;
-    RGB[1] *= 255.0f;
-    RGB[2] *= 255.0f;*/
-    //clamp RGB values
-    clampToZero(RGB,3);
+   
 
     // attenuation below elev. 75 deg. ----------------------               
     //float thLim = 1.3089969389957471826927680763665; //75.f*(PI/180.f)
@@ -253,5 +266,11 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
     //    for (int isp = 0; isp < 3; isp++)
     //        RGB[isp] *= cos(theta_i_BKP) / cosThLim;
     //}
+    XYZ2sRGB(RGB, scale);
+    /*RGB[0] *= 255.0f;
+    RGB[1] *= 255.0f;
+    RGB[2] *= 255.0f;*/
+    //clamp RGB values
+    clampToZero(RGB, 3);
     return;
 }

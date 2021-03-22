@@ -53,35 +53,34 @@ public:
         if (unlikely(none_or<false>(active) || !ctx.is_enabled(BSDFFlags::DiffuseReflection)))
             return { bs, 0.f };
       
-         bs.wo                = warp::square_to_cosine_hemisphere(sample2);
-         bs.pdf               = warp::square_to_cosine_hemisphere_pdf(bs.wo);
-         bs.eta               = 1.0f;
-         bs.sampled_type      = +BSDFFlags::DiffuseReflection;
-         bs.sampled_component = 0;
-         float_t r2d          = 180.0 / M_PI;
-         float_t theta_o      = r2d * acos(bs.wo[2]);
-         float_t theta_i      = r2d * acos(si.wi[2]);
-         float_t phi_o        = r2d * atan2(bs.wo[1], bs.wo[0]);
-         float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
-         // make sure phi is in [0, 360)
-         while (phi_i < 0.0) {
-             phi_i += 360.0;
-         }
-         while (phi_o < 0.0) {
-             phi_o += 360.0;
-         }
-         while (phi_i >= 360) {
-             phi_i -= 360.0;
-         }
-         while (phi_o >= 360) {
-             phi_o -= 360.0;
-         }
-         float RGB[3];
-         // Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0],
-         // si.uv[1]);
-         big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,  RGB); // get RGB value from BIG file,  UV coordinate
-         spect =  Color3f(RGB[0], RGB[1],RGB[2]); //M_PI *  / Frame3f::cos_theta(bs.wo)* M_PI /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
-       
+        bs.wo                = warp::square_to_cosine_hemisphere(sample2);
+        bs.pdf               = warp::square_to_cosine_hemisphere_pdf(bs.wo);
+        bs.eta               = 1.0f;
+        bs.sampled_type      = +BSDFFlags::DiffuseReflection;
+        bs.sampled_component = 0;
+        float_t r2d          = 180.0 / M_PI;
+        float_t theta_o      = r2d * acos(bs.wo[2]);
+        float_t theta_i      = r2d * acos(si.wi[2]);
+        float_t phi_o        = r2d * atan2(bs.wo[1], bs.wo[0]);
+        float_t phi_i        = r2d * atan2(si.wi[1], si.wi[0]);
+        // make sure phi is in [0, 360)
+        while (phi_i < 0.0) {
+            phi_i += 360.0;
+        }
+        while (phi_o < 0.0) {
+            phi_o += 360.0;
+        }
+        while (phi_i >= 360) {
+            phi_i -= 360.0;
+        }
+        while (phi_o >= 360) {
+            phi_o -= 360.0;
+        }
+        float RGB[3];
+        // Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0],
+        // si.uv[1]);
+        big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,  RGB); // get RGB value from BIG file,  UV coordinate
+        spect = Color3f(RGB[0], RGB[1],RGB[2]); //M_PI *  / Frame3f::cos_theta(bs.wo)* M_PI /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
         return { bs, select(active,spect,0.0f) }; // 
     }
 
@@ -111,7 +110,8 @@ public:
             big_render->getPixel(
                 si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
                 RGB); // get RGB value from BIG file,  UV coordinate
-            spect = Color3f(RGB[0], RGB[1], RGB[2]) * math::InvPi<float>; //  * cos_theta_o cosine term. 
+            //invPI for darken lights spots and cost thete to darken light part
+            spect = Color3f(RGB[0], RGB[1], RGB[2]) * cos_theta_o * math::InvPi<float>; //* math::InvPi<float>  * cos_theta_o cosine term. 
         }
         return spect;
     }

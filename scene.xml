@@ -1,58 +1,63 @@
 <scene version="2.1.0">
 
-<!-- Defaults, these can be set via the command line: -Darg=value -->
+  <!-- Defaults, these can be set via the command line: -Darg=value -->
 
-	<default name="spp" value="128"/>
-	<default name="resx" value="200"/>
-	<default name="resy" value="200"/>
+  <default name="spp" value="2"/>
+  <default name="resx" value="1280"/>
+  <default name="resy" value="720"/>
 
-<!-- Camera and Rendering Parameters -->
+  <!-- Camera and Rendering Parameters -->
 
-	<integrator type="path">
-		<integer name="max_depth" value="8"/>
-	</integrator>
-	<sensor type="perspective">
-		<string name="fov_axis" value="x"/>
-		<float name="fov" value="39.597755"/>
-		<float name="near_clip" value="0.100000"/>
-		<float name="far_clip" value="100.000000"/>
-		<transform name="to_world">
-			<rotate x="1" angle="-170.14814015012993"/>
-			<rotate y="1" angle="-83.73953307351452"/>
-			<rotate z="1" angle="-136.91870976250596"/>
-			<translate value="7.192588 10.310959 -0.689936"/>
-		</transform>
-		<sampler type="independent">
-			<integer name="sample_count" value="$spp"/>
-		</sampler>
-		<film type="hdrfilm">
-			<integer name="width" value="$resx"/>
-			<integer name="height" value="$resy"/>
-		</film>
-	</sensor>
+  <integrator type="path">
+    <integer name="max_depth" value="2"/>
+  </integrator>
+  <!-- <integrator type="direct">
+    <integer name="emitter_samples" value="1"/>
+    <integer name="bsdf_samples" value="4"/>
+  </integrator>-->
+  
+  <sensor type="perspective">
+    <string name="fov_axis" value="x"/>
+    <float name="fov" value="39.597755"/>
+    <float name="near_clip" value="0.100000"/>
+    <float name="far_clip" value="100.000000"/>
+    <transform name="to_world">
+      <rotate x="1" angle="-170.14814015012993"/>
+      <rotate y="1" angle="-83.73953307351452"/>
+      <rotate z="1" angle="-136.91870976250596"/>
+      <translate value="7.192588 10.310959 -0.689936"/>
+    </transform>
+    <sampler type="independent">
+      <integer name="sample_count" value="$spp"/>
+    </sampler>
+    <film type="hdrfilm">
+      <integer name="width" value="$resx"/>
+      <integer name="height" value="$resy"/>
+    </film>
+  </sensor>
 
-<!-- Materials -->
+  <!-- Materials -->
 
-	<bsdf type="twosided" id="default-bsdf">
-		<bsdf type="diffuse"/>
-	</bsdf>
+  <bsdf type="twosided" id="default-bsdf">
+    <bsdf type="diffuse"/>
+  </bsdf>
 
-<!-- Emitters -->
+  <!-- Emitters -->
   <emitter type="point">
     <point name="position" x="0.960860013961792" y="6.648717403411865" z="-1.7963459491729736"/>
-    <rgb value="79.577469 79.577469 79.577469" name="intensity"/>
+    <rgb value="35.577469 35.577469 35.577469" name="intensity"/>
   </emitter>
 
-<!-- Shapes -->
+  <!-- Shapes -->
 
-	<shape type="ply">
-		<string name="filename" value="meshes\Sphere.ply"/>
+  <shape type="ply">
+    <string name="filename" value="meshes\Sphere.ply"/>
     <bsdf type="bigbtf">
       <string name="big_filepath" value="bigFiles/fabric106_uniform_V2.big"/>
     </bsdf>
-	</shape>
-	<shape type="ply">
-		<string name="filename" value="meshes\Cube.ply"/>
-		<ref id="default-bsdf" name="bsdf"/>
-	</shape>
+  </shape>
+  <shape type="ply">
+    <string name="filename" value="meshes\Cube.ply"/>
+    <ref id="default-bsdf" name="bsdf"/>
+  </shape>
 </scene>
