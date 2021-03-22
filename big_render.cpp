@@ -15,13 +15,17 @@ private:
     int np;               //! number of azimuths
     float r2d;
     big::BigCoreRead * bigR; //BIG read structure
+    //UTIA have some invalid data (negative), we can't have negative value in this data, so we clamp negative values to zero
+    void clampToZero(float array[], int size);
+    //helper functions
+    template<typename T> static T max(const T& a, const T& b) { return a > b ? a : b; }
 
 public:
     BigRender(std::string, bool cache = false, int cache_size = 0);
     ~BigRender();
     //get pixel from BIG file
     void getPixel(float u, float v, float theta_i, float phi_i, float theta_v, float phi_v, float RGB[]);
-
+ 
     //convert float XYZ in XYZ retrun RGB values
     void XYZ2sRGB(float XYZ[], float scale[]);
 
@@ -70,6 +74,12 @@ BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
 BigRender::~BigRender() {
     delete bigR;
 }//--- ~RenderBIG --------------------------------------------------
+
+void BigRender::clampToZero(float array[], int size) {
+    for (int i = 0; i < size; i++) {
+        array[i] = max(0.0f, array[i]);
+    }
+}
 
 void BigRender::XYZ2sRGB(float XYZ[], float scale[]) {
     /*! \brief Conversion from CIE XYZ colour space into RGB
@@ -225,12 +235,15 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
                     }
 
                 }
-
+    //clamp XYZ values
+    clampToZero(RGB,3);
     float scale[3] = { 1.0f, 1.0f, 1.0f };
     XYZ2sRGB(RGB, scale);
     /*RGB[0] *= 255.0f;
     RGB[1] *= 255.0f;
     RGB[2] *= 255.0f;*/
+    //clamp RGB values
+    clampToZero(RGB,3);
 
     // attenuation below elev. 75 deg. ----------------------               
     //float thLim = 1.3089969389957471826927680763665; //75.f*(PI/180.f)
