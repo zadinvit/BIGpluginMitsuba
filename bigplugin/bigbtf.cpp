@@ -39,7 +39,7 @@ public:
             std::string pathToCubeMap = props.string("cubemap_path");
             big_render = new BigRender(filename, false, 0, pathToCubeMap);
         } else {
-            big_render = new BigRender(filename, false, 0);
+            big_render = new BigRender(filename, true, 1073741824);//1GB
         }
 
        
@@ -47,6 +47,10 @@ public:
         m_flags    = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide;
         m_components.push_back(m_flags);
 
+    }
+
+    ~BigBTF() {
+        delete big_render;
     }
     //sample function, sample texture data 
     std::pair<BSDFSample3f, Spectrum>

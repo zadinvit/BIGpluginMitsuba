@@ -18,7 +18,7 @@ private:
     float step_p;
     int np;               //! number of azimuths
     float r2d;
-    float** anglesUBO; //! array of angles: index,theta,phi,[x,y,z] coord. of individual directions
+    float** anglesUBO = NULL; //! array of angles: index,theta,phi,[x,y,z] coord. of individual directions
     //TCubeMap* CM;      // cubemaps
     big::BigCoreRead * bigR; //BIG read structure
     Distribution dist;
