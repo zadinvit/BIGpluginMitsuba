@@ -35,7 +35,15 @@ public:
         }
         std::string filename = props.string("big_filepath");
         Log(Info, "Loading file \"%s\" ..", filename);
-        big_render = new BigRender(filename, false, 0);
+        if (props.has_property("cubemap_path")) {
+            std::string pathToCubeMap = props.string("cubemap_path");
+            big_render = new BigRender(filename, false, 0, pathToCubeMap);
+        } else {
+            big_render = new BigRender(filename, false, 0);
+        }
+
+       
+      
         m_flags    = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide;
         m_components.push_back(m_flags);
 
@@ -44,7 +52,7 @@ public:
     std::pair<BSDFSample3f, Spectrum>
     sample(const BSDFContext &ctx, const SurfaceInteraction3f &si,
            Float sample1, const Point2f &sample2, Mask active) const override {
-        MTS_MASKED_FUNCTION(ProfilerPhase::BSDFSample, active);
+       // MTS_MASKED_FUNCTION(ProfilerPhase::BSDFSample, active);// lower perfonmance 
         //Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0], si.uv[1]);
         float cos_theta_i = Frame3f::cos_theta(si.wi);
         Spectrum spect;
@@ -88,7 +96,7 @@ public:
     //emitter sampling
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
                   const Vector3f &wo, Mask active) const override {
-        MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+       // MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
         float cos_theta_i = Frame3f::cos_theta(si.wi);
         float cos_theta_o = Frame3f::cos_theta(wo);
         Spectrum spect;
@@ -119,7 +127,7 @@ public:
     //Compute the probability per unit solid angle of sampling a given direction
     Float pdf(const BSDFContext &ctx, const SurfaceInteraction3f &si,
               const Vector3f &wo, Mask active) const override {
-        MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
+       // MTS_MASKED_FUNCTION(ProfilerPhase::BSDFEvaluate, active);
         float cos_theta_i = Frame3f::cos_theta(si.wi);
         float cos_theta_o = Frame3f::cos_theta(wo);
         //!ctx.is_enabled(BSDFFlags::DiffuseReflection) newest version off !(active & BSDFFlags::DiffuseReflection)

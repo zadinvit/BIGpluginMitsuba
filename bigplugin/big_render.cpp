@@ -40,7 +40,7 @@ public:
     //constructor for uniform data
     BigRender(std::string, bool cache = false, int cache_size = 0);
     //constructor for cubemaps
-    BigRender(std::string bigname, std::string path_to_cube_maps, bool cache, int cache_size = 0);
+    BigRender(std::string bigname, bool cache, int cache_size, std::string path_to_cube_maps);
     ~BigRender();
     //get pixel from BIG file
     void getPixel(float u, float v, float theta_i, float phi_i, float theta_v, float phi_v, float RGB[]);
@@ -97,7 +97,7 @@ void BigRender::init(std::string &bigname, bool cache, int cache_size) {
     this->planes = bigR->getNumberOfPlanes(); // number of specters
 }
 
-BigRender::BigRender(std::string bigname, std::string path_to_cube_maps, bool cache, int cache_size) {
+BigRender::BigRender(std::string bigname, bool cache, int cache_size, std::string path_to_cube_maps) {
    
     init(bigname, cache, cache_size);
     this->dist = Distribution::cubes;
