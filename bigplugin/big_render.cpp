@@ -3,7 +3,7 @@
 
 #include "big_core_read.hpp"
 //include cubemaps indexing class provide by Jiri Filip
-//#include "TCubeMap.cpp"
+#include "TCubeMap.cpp"
 
 enum class Distribution { uniform, cubes };
 class BigRender
@@ -19,7 +19,7 @@ private:
     int np;               //! number of azimuths
     float r2d;
     float** anglesUBO = NULL; //! array of angles: index,theta,phi,[x,y,z] coord. of individual directions
-    //TCubeMap* CM;      // cubemaps
+    TCubeMap* CM = NULL;      // cubemaps
     big::BigCoreRead * bigR; //BIG read structure
     Distribution dist;
     //load big file, and set default parameters
@@ -89,7 +89,7 @@ void BigRender::init(std::string &bigname, bool cache, int cache_size) {
     catch (const char* msg) {
         std::cout << msg << std::endl;
     }
-
+    this->r2d = 180.f / M_PI;
 
     this->nr = bigR->getImageHeight();
     this->nc = bigR->getImageWidth();
@@ -109,7 +109,7 @@ BigRender::BigRender(std::string bigname, bool cache, int cache_size, std::strin
 
 
     // cubemaps creation
-    //CM = new TCubeMap(path_to_cube_maps.data());
+    CM = new TCubeMap(path_to_cube_maps.data());
 }
 
 
@@ -124,7 +124,6 @@ BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
     this->np = (int)(360.f / step_p);//kroky na otoèku
     this->ni = 1 + np * (nti - 1);//množství smìrù osvìtlení 
     this->nv = np * ntv;//pro kamery
-    this->r2d = 180.f / M_PI;
 }
 
 
@@ -133,10 +132,10 @@ BigRender::~BigRender() {
     if (anglesUBO != NULL)
         freemem2(anglesUBO, 0, 80, 0, 8);
 
-    /*if (CM) {
+    if (CM) {
         delete CM;
         CM = 0;
-    }*/
+    }
 }
 
 
@@ -222,6 +221,7 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
         getPixelUniform(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
         break;
     case Distribution::cubes:
+        getPixelCubeMaps(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
         break;
     default:
         break;
@@ -233,10 +233,21 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
 void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i,
                          float& theta_v, float& phi_v, float RGB[]) {
     //radian versions of angles
-    float theta_i_BKP = theta_i/ r2d; 
-    float theta_v_BKP = theta_v/ r2d;
-    float phi_i_BKP = phi_i/ r2d;
-    float phi_v_BKP = phi_v/ r2d;
+    float theta_i_BKP = theta_i; 
+    float theta_v_BKP = theta_v;
+    float phi_i_BKP = phi_i;
+    float phi_v_BKP = phi_v;
+
+    //convert from radians to degree
+    theta_v = theta_v * r2d;
+    theta_i = theta_i * r2d;
+    phi_v = phi_v * r2d;
+    phi_i = phi_i * r2d;
+    // make sure phi is in [0, 360)
+    while (phi_i < 0.0) { phi_i += 360.0; }
+    while (phi_v < 0.0) { phi_v += 360.0; }
+    while (phi_i >= 360) { phi_i -= 360.0; }
+    while (phi_v >= 360) { phi_v -= 360.0; }
 
     int iti[2] = { 0,0 }, itv[2] = { 0,0 }, ipi[2] = { 0,0 }, ipv[2] = { 0,0 };//dva nejbližší indexy mezi úhly
     float wti[2] = { 0.f,0.f }, wtv[2] = { 0.f,0.f }, wpi[2] = { 0.f,0.f }, wpv[2] = { 0.f,0.f };  //váhy mezi dvìma indexy
@@ -341,25 +352,27 @@ void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i
                     }
 
                 }
+
+    attenuateElevations(theta_i_BKP, RGB);
     XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
     //clamp RGB values, measure data could be negative, need clamp this data to zero
     clampToZero(RGB, 3);
-    attenuateElevations(theta_i_BKP, RGB);
+
     return;
 }
 
 void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_i,
     float &theta_v, float& phi_v, float RGB[]) {
     //radian versions of angles
-    float theta_i_BKP = theta_i / r2d;
+    float theta_i_BKP = theta_i;
 
     int i_index[3];
     float i_weight[3];
     int v_index[3];
     float v_weight[3];
     // illum. and view directions indices from cubemaps class
-    //CM->interpolateCM(theta_i, phi_i, i_weight, i_index);
-    //CM->interpolateCM(theta_v, phi_v, v_weight, v_index);
+    CM->interpolateCM(theta_i, phi_i, i_weight, i_index);
+    CM->interpolateCM(theta_v, phi_v, v_weight, v_index);
 
     // mixed interp. weights computation
     int illuPos[9];
@@ -398,8 +411,14 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
         for (int isp = 0; isp < 3; isp++)
             RGB[isp] += texWeights[i] * aux[isp];
     }
-    // soft transfer on shadow boundaries
+
     attenuateElevations(theta_i_BKP, RGB);
+
+    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
+    //clamp RGB values, measure data could be negative, need clamp this data to zero
+    clampToZero(RGB, 3);
+    // soft transfer on shadow boundaries
+
 
 
 }

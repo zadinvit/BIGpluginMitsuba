@@ -17,7 +17,7 @@
 
 #include "TCubeMap.h"
 
-#include "TAlloc.h"
+#include "TAlloc.cpp"
 #include "readpng.h"
 
 #define PI 3.14159265358979323846
@@ -60,7 +60,7 @@ TCubeMap::TCubeMap(char* appDir)
   this->CMsize = 256; // 1024; //256;
 
   char aux[100];
-  sprintf(aux,"%s/../data/cubemaps/081/%04d/",appDir,CMsize);
+  sprintf(aux,"%s",appDir,CMsize);
   loadCubemaps(aux, CMsize);
 
 }//--- TCubeMap ----------------------------------------------
