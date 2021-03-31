@@ -21,29 +21,19 @@ public:
 
     BigBTF(const Properties &props) : Base(props) {
         int bsdf_index = 0;
-        std::cout << "hello sd" << std::endl;
-        Log(Info, "Start");
-        for (auto &[name, obj] : props.objects(false)) {
-            auto *bsdf = dynamic_cast<Base *>(obj.get());
-            if (bsdf) {
-                if (bsdf_index == 2)
-                    Throw(
-                        "BlendBSDF: Cannot specify more than two child BSDFs");
-                m_nested_bsdf[bsdf_index++] = bsdf;
-                props.mark_queried(name);
-            }
-        }
+
         std::string filename = props.string("big_filepath");
         Log(Info, "Loading file \"%s\" ..", filename);
-        int memory = 0;
+        uint64_t memory = 0;
         bool useMemory = false;
         if (props.has_property("memory")) {
             memory = props.int_("memory");
+            memory = memory * 1024 * 1024; //convert from MB to B 
             if (memory >= 0) {
                 useMemory = true;
             }
         }
-
+       
         if (props.has_property("cubemap_path")) {
             std::string pathToCubeMap = props.string("cubemap_path");
             if (pathToCubeMap.compare(pathToCubeMap.size()-1,1,"/")) {
@@ -53,6 +43,12 @@ public:
         } else {
             big_render = new BigRender(filename, useMemory, memory);
         }
+
+        if (props.has_property("scale")) {
+            float scale = props.float_("scale");
+            big_render->setScale(scale);
+        }
+
 
        
       
@@ -87,6 +83,8 @@ public:
         float_t phi_i = atan2(si.wi[1], si.wi[0]);
         float_t phi_o = atan2(bs.wo[1], bs.wo[0]);
         float RGB[3];
+        auto test = si.shape;
+        bool sensor = test->is_sensor();
         // Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0],
         // si.uv[1]);
         big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,  RGB); // get RGB value from BIG file,  UV coordinate

@@ -18,12 +18,13 @@ private:
     float step_p;
     int np;               //! number of azimuths
     float r2d;
+    float uv_scale = 7;
     float** anglesUBO = NULL; //! array of angles: index,theta,phi,[x,y,z] coord. of individual directions
     TCubeMap* CM = NULL;      // cubemaps
     big::BigCoreRead * bigR; //BIG read structure
     Distribution dist;
     //load big file, and set default parameters
-    void init(std::string &bigname, bool cache, int cache_size);
+    void init(std::string &bigname, bool cache, uint64_t cache_size);
     //generate angles from cubemaps
     void generateDirectionsUBO(float** anglesUBO);
     //UTIA have some invalid data (negative), we can't have negative value in this data, so we clamp negative values to zero
@@ -38,9 +39,9 @@ private:
 
 public:
     //constructor for uniform data
-    BigRender(std::string, bool cache = false, int cache_size = 0);
+    BigRender(std::string, bool cache = false, uint64_t cache_size = 0);
     //constructor for cubemaps
-    BigRender(std::string bigname, bool cache, int cache_size, std::string path_to_cube_maps);
+    BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps);
     ~BigRender();
     //get pixel from BIG file
     void getPixel(float u, float v, float theta_i, float phi_i, float theta_v, float phi_v, float RGB[]);
@@ -53,6 +54,8 @@ public:
     void XYZtoRGB(float XYZ[]);
     // soft transfer on shadow boundaries
     void attenuateElevations(float theta_i, float RGB[]);
+    //set tiling scale of UV coordinates
+    void setScale(float scale);
 
 };//--- RenderBIG -------------------------------------------------------
 
@@ -81,7 +84,7 @@ void  BigRender::freemem2(float** m, int nrl, int nrh, int ncl, int nch) {
     free((float**)(m + nrl));
 }
 
-void BigRender::init(std::string &bigname, bool cache, int cache_size) {
+void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
     try {
         /* read info from BIG file */
         bigR = new big::BigCoreRead(bigname, cache, cache_size);
@@ -97,7 +100,9 @@ void BigRender::init(std::string &bigname, bool cache, int cache_size) {
     this->planes = bigR->getNumberOfPlanes(); // number of specters
 }
 
-BigRender::BigRender(std::string bigname, bool cache, int cache_size, std::string path_to_cube_maps) {
+
+
+BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps) {
    
     init(bigname, cache, cache_size);
     this->dist = Distribution::cubes;
@@ -113,7 +118,7 @@ BigRender::BigRender(std::string bigname, bool cache, int cache_size, std::strin
 }
 
 
-BigRender::BigRender(std::string bigname, bool cache, int cache_size) {
+BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size) {
     init(bigname,cache, cache_size);
 
     this->dist = Distribution::uniform;
@@ -138,6 +143,9 @@ BigRender::~BigRender() {
     }
 }
 
+void BigRender::setScale(float scale) {
+    uv_scale = scale;
+}
 
 
 void BigRender::clampToZero(float array[], int size) {
@@ -156,9 +164,9 @@ void BigRender::XYZtoRGB(float XYZ[]) {
     double g = x * -0.9692660 + y * 1.8760108 + z * 0.0415560;
     double b = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
 
-    r = ((r > 0.0031308) ? (1.055 * pow(r, 1 / 2.4) - 0.055) : (12.92 * r));
+  /*  r = ((r > 0.0031308) ? (1.055 * pow(r, 1 / 2.4) - 0.055) : (12.92 * r));
     g = ((g > 0.0031308) ? (1.055 * pow(g, 1 / 2.4) - 0.055) : (12.92 * g));
-    b = ((b > 0.0031308) ? (1.055 * pow(b, 1 / 2.4) - 0.055) : (12.92 * b));
+    b = ((b > 0.0031308) ? (1.055 * pow(b, 1 / 2.4) - 0.055) : (12.92 * b));*/
 
     XYZ[0] = r;
     XYZ[1] = g;
@@ -315,9 +323,8 @@ void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i
     // compute texture mapping
     //int irow = y % nr;
     //int jcol = x % nc;
-    int texture_scale    = 7;
-    int irow = (int) (floor(u * (float) nr * texture_scale)) % nr;
-    int jcol = (int) (floor(v * (float) nc * texture_scale)) % nc;
+    int irow = (int) (floor(u * (float) nr * uv_scale)) % nr;
+    int jcol = (int) (floor(v * (float) nc * uv_scale)) % nc;
     //int irow = (int) floor(v * (float) nr);
     //int jcol = (int) floor(u * (float) nc);
 
@@ -388,9 +395,8 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
         }
 
     // compute texture mapping
-    int texture_scale = 7;
-    int irow = (int)(floor(u * (float)nr * texture_scale)) % nr;
-    int jcol = (int)(floor(v * (float)nc * texture_scale)) % nc;
+    int irow = (int)(floor(u * (float)nr * uv_scale)) % nr;
+    int jcol = (int)(floor(v * (float)nc * uv_scale)) % nc;
 
     for (int isp = 0; isp < 3; isp++)
         RGB[isp] = 0.f;
