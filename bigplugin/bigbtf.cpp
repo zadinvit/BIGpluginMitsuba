@@ -52,7 +52,7 @@ public:
 
        
       
-        m_flags    = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide;
+        m_flags    = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide | BSDFFlags::NeedsDifferentials;
         m_components.push_back(m_flags);
 
     }
@@ -82,11 +82,12 @@ public:
         float_t theta_o = acos(bs.wo[2]);
         float_t phi_i = atan2(si.wi[1], si.wi[0]);
         float_t phi_o = atan2(bs.wo[1], bs.wo[0]);
+        Vector2f duv_dx = si.duv_dx;
+        Vector2f duv_dy = si.duv_dy;
+        float width = max(max(duv_dx[0], duv_dx[1]), max(duv_dy[0], duv_dy[1]));
+        Log(Info, "width \"%d\" ", width);
+        //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
         float RGB[3];
-        auto test = si.shape;
-        bool sensor = test->is_sensor();
-        // Log(Info, "UV Coordinats u \"%d\" v \"%d\" ", si.uv[0],
-        // si.uv[1]);
         big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,  RGB); // get RGB value from BIG file,  UV coordinate
         spect = Color3f(RGB[0], RGB[1],RGB[2]); //M_PI *  / Frame3f::cos_theta(bs.wo)* M_PI /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
         return { bs, select(active,spect,0.0f) }; // 

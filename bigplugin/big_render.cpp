@@ -1,14 +1,37 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
-
 #include "big_core_read.hpp"
 //include cubemaps indexing class provide by Jiri Filip
 #include "TCubeMap.cpp"
+#include "pugixml.cpp"
 
-enum class Distribution { uniform, cubes };
+enum class Distribution { uniform, UBO, none};
+static std::unordered_map<std::string, Distribution > const table = { {"uniform",Distribution::uniform}, {"UBO",Distribution::UBO} };
+Distribution parse(std::string str) {
+    auto it = table.find(str);
+    if (it != table.end())
+        return it->second;
+    else
+        return Distribution::none;
+}
+
 class BigRender
 {
-   
+    struct MipLvl
+    {
+        int x;
+        int y;
+        int rows;
+        int cols;
+        MipLvl(pugi::xml_node node) {
+            pugi::xml_node size = node.child("size");
+            cols = size.attribute("cols").as_int();
+            rows = size.attribute("rows").as_int();
+            pugi::xml_node origin = node.child("origin");
+            x = origin.attribute("x").as_int();
+            y = origin.attribute("y").as_int();
+        }
+    };
 private:
     int nr, nc, planes, nimg;
     int ni, nv;
@@ -20,9 +43,17 @@ private:
     float r2d;
     float uv_scale = 7;
     float** anglesUBO = NULL; //! array of angles: index,theta,phi,[x,y,z] coord. of individual directions
+
+    //mipmapping
+    ///origin point of each level first x and second y
+    std::vector<MipLvl> mipmapLevels;
+
+
     TCubeMap* CM = NULL;      // cubemaps
     big::BigCoreRead * bigR; //BIG read structure
     Distribution dist;
+    //xml document
+    pugi::xml_document doc;
     //load big file, and set default parameters
     void init(std::string &bigname, bool cache, uint64_t cache_size);
     //generate angles from cubemaps
@@ -34,6 +65,8 @@ private:
     //memory init and clear
     float** allocation2(int nrl, int nrh, int ncl, int nch);
     void freemem2(float** m, int nrl, int nrh, int ncl, int nch);
+    //parse data from big XML
+    void parseDataFromXML();
    
     
 
@@ -49,13 +82,15 @@ public:
     void getPixelUniform(float& u, float &v, float &theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
     //get pixel from BIG file
     void getPixelCubeMaps(float &u, float &v, float& theta_i, float& phi_i, float &theta_v, float& phi_v, float RGB[]);
-
     //Convert XYZ to sRGB 0-1 format
     void XYZtoRGB(float XYZ[]);
     // soft transfer on shadow boundaries
     void attenuateElevations(float theta_i, float RGB[]);
     //set tiling scale of UV coordinates
     void setScale(float scale);
+    //maximal mipmap level
+    int mipmapLevel;
+   
 
 };//--- RenderBIG -------------------------------------------------------
 
@@ -98,14 +133,14 @@ void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
     this->nc = bigR->getImageWidth();
     this->nimg = bigR->getNumberOfImages();
     this->planes = bigR->getNumberOfPlanes(); // number of specters
+    parseDataFromXML();
 }
-
 
 
 BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps) {
    
     init(bigname, cache, cache_size);
-    this->dist = Distribution::cubes;
+    this->dist = Distribution::UBO;
     this->ni = 81;
     this->nv = 81;
     // generating list of angles 
@@ -143,6 +178,24 @@ BigRender::~BigRender() {
     }
 }
 
+
+void BigRender::parseDataFromXML() {
+    std::string XML = bigR->getXMLFile();
+    std::cout << XML << std::endl;
+    pugi::xml_parse_result result = doc.load_string(XML.c_str());
+    pugi::xml_node root = doc.document_element();
+    pugi::xml_node type = root.child("type");
+    std::string typeString = type.text().as_string();
+    dist = parse(typeString);
+    pugi::xml_node mipmap = root.child("mipmap");
+    pugi::xml_node levels = mipmap.child("levels");
+    mipmapLevel = levels.attribute("count").as_int();
+    for (const auto& child : levels) {
+        mipmapLevels.push_back(MipLvl(child));
+    }
+    auto test = mipmap.first_child();
+}
+
 void BigRender::setScale(float scale) {
     uv_scale = scale;
 }
@@ -163,10 +216,6 @@ void BigRender::XYZtoRGB(float XYZ[]) {
     double r = x * 3.2404542 + y * -1.5371385 + z * -0.4985314;
     double g = x * -0.9692660 + y * 1.8760108 + z * 0.0415560;
     double b = x * 0.0556434 + y * -0.2040259 + z * 1.0572252;
-
-  /*  r = ((r > 0.0031308) ? (1.055 * pow(r, 1 / 2.4) - 0.055) : (12.92 * r));
-    g = ((g > 0.0031308) ? (1.055 * pow(g, 1 / 2.4) - 0.055) : (12.92 * g));
-    b = ((b > 0.0031308) ? (1.055 * pow(b, 1 / 2.4) - 0.055) : (12.92 * b));*/
 
     XYZ[0] = r;
     XYZ[1] = g;
@@ -228,7 +277,7 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
     case Distribution::uniform:
         getPixelUniform(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
         break;
-    case Distribution::cubes:
+    case Distribution::UBO:
         getPixelCubeMaps(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
         break;
     default:
