@@ -4,9 +4,12 @@
 //include cubemaps indexing class provide by Jiri Filip
 #include "TCubeMap.cpp"
 #include "pugixml.cpp"
-
+#include "MIFbtf.hpp"
+using namespace mif;
+using namespace mif::directions;
+using namespace mif::mipmap;
 enum class Distribution { uniform, UBO, none};
-static std::unordered_map<std::string, Distribution > const table = { {"uniform",Distribution::uniform}, {"UBO",Distribution::UBO} };
+static std::unordered_map<std::string, Distribution > const table = { {"uniform",Distribution::uniform}, {"UBO81x81",Distribution::UBO} };
 Distribution parse(std::string str) {
     auto it = table.find(str);
     if (it != table.end())
@@ -17,21 +20,6 @@ Distribution parse(std::string str) {
 
 class BigRender
 {
-    struct MipLvl
-    {
-        int x;
-        int y;
-        int rows;
-        int cols;
-        MipLvl(pugi::xml_node node) {
-            pugi::xml_node size = node.child("size");
-            cols = size.attribute("cols").as_int();
-            rows = size.attribute("rows").as_int();
-            pugi::xml_node origin = node.child("origin");
-            x = origin.attribute("x").as_int();
-            y = origin.attribute("y").as_int();
-        }
-    };
 private:
     int nr, nc, planes, nimg;
     int ni, nv;
@@ -44,13 +32,13 @@ private:
     float uv_scale = 7;
     float** anglesUBO = NULL; //! array of angles: index,theta,phi,[x,y,z] coord. of individual directions
 
-    //mipmapping
-    ///origin point of each level first x and second y
-    std::vector<MipLvl> mipmapLevels;
 
 
     TCubeMap* CM = NULL;      // cubemaps
-    big::BigCoreRead * bigR; //BIG read structure
+    //big::BigCoreRead * bigR; //BIG read structure
+    MIFbtf mif;
+    MIFbtf::MIFcacheWhole * cache = NULL;
+    MIFbtf::MIFcacheNone * disk = NULL;
     Distribution dist;
     //xml document
     pugi::xml_document doc;
@@ -65,8 +53,6 @@ private:
     //memory init and clear
     float** allocation2(int nrl, int nrh, int ncl, int nch);
     void freemem2(float** m, int nrl, int nrh, int ncl, int nch);
-    //parse data from big XML
-    void parseDataFromXML();
    
     
 
@@ -122,25 +108,37 @@ void  BigRender::freemem2(float** m, int nrl, int nrh, int ncl, int nch) {
 void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
     try {
         /* read info from BIG file */
-        bigR = new big::BigCoreRead(bigname, cache, cache_size);
+        mif.open(bigname, true);
+        //bigR = new big::BigCoreRead(bigname, cache, cache_size);
     }
     catch (const char* msg) {
         std::cout << msg << std::endl;
     }
+    if (cache) {
+        this->cache = new MIFbtf::MIFcacheWhole(mif,"btf0");
+    } else {
+        this->disk = new MIFbtf::MIFcacheNone(mif, "btf0");
+    }
     this->r2d = 180.f / M_PI;
-
-    this->nr = bigR->getImageHeight();
-    this->nc = bigR->getImageWidth();
-    this->nimg = bigR->getNumberOfImages();
-    this->planes = bigR->getNumberOfPlanes(); // number of specters
-    parseDataFromXML();
+    if (cache) {
+        this->nr = this->cache->getImageHeight();
+        this->nc = this->cache->getImageWidth();
+        this->nimg = this->cache->getNumberOfImages();
+        this->planes = this->cache->getImageNumberOfPlanes(); // number of specters
+    } else {
+        this->nr = this->disk->getImageHeight(0);
+        this->nc = this->disk->getImageWidth(0);
+        this->nimg = this->disk->getNumberOfImages();
+        this->planes = this->disk->getImageNumberOfPlanes(0);
+    }
+    Directions directions = mif.getBtfDirections("btf0");
+    this->dist = parse(directions.name);
 }
 
 
 BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps) {
    
     init(bigname, cache, cache_size);
-    this->dist = Distribution::UBO;
     this->ni = 81;
     this->nv = 81;
     // generating list of angles 
@@ -156,7 +154,6 @@ BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::
 BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size) {
     init(bigname,cache, cache_size);
 
-    this->dist = Distribution::uniform;
     this->ntv = 5;
     this->nti = 6;
     this->step_t = 15.f;
@@ -168,7 +165,9 @@ BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size) {
 
 
 BigRender::~BigRender() {
-    delete bigR;
+    //delete bigR;
+    if(cache!=NULL)
+        delete cache;
     if (anglesUBO != NULL)
         freemem2(anglesUBO, 0, 80, 0, 8);
 
@@ -178,23 +177,6 @@ BigRender::~BigRender() {
     }
 }
 
-
-void BigRender::parseDataFromXML() {
-    std::string XML = bigR->getXMLFile();
-    std::cout << XML << std::endl;
-    pugi::xml_parse_result result = doc.load_string(XML.c_str());
-    pugi::xml_node root = doc.document_element();
-    pugi::xml_node type = root.child("type");
-    std::string typeString = type.text().as_string();
-    dist = parse(typeString);
-    pugi::xml_node mipmap = root.child("mipmap");
-    pugi::xml_node levels = mipmap.child("levels");
-    mipmapLevel = levels.attribute("count").as_int();
-    for (const auto& child : levels) {
-        mipmapLevels.push_back(MipLvl(child));
-    }
-    auto test = mipmap.first_child();
-}
 
 void BigRender::setScale(float scale) {
     uv_scale = scale;
@@ -370,14 +352,9 @@ void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i
         ipv[1] = 0;
 
     // compute texture mapping
-    //int irow = y % nr;
-    //int jcol = x % nc;
-    int irow = (int) (floor(u * (float) nr * uv_scale)) % nr;
-    int jcol = (int) (floor(v * (float) nc * uv_scale)) % nc;
-    //int irow = (int) floor(v * (float) nr);
-    //int jcol = (int) floor(u * (float) nc);
-
-    float aux[3];
+    //abs u and v because mitsuba scene matpreview.xml have negative UV coordinates.
+    int irow = (int) (floor(abs(u) * (float) nr * uv_scale)) % nr;
+    int jcol = (int) (floor(abs(v) * (float) nc * uv_scale)) % nc;
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
 
@@ -391,22 +368,23 @@ void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i
                     if (iti[i] == 0)
                         idx = idxCam;
                     else
-                        idx = idxCam + 1 + np * (iti[i] - 1) + ipi[k];      
-                    try {
-                        aux[0] = bigR->at<float>(idx, irow, jcol, 0);
-                        aux[1] = bigR->at<float>(idx, irow, jcol, 1);
-                        aux[2] = bigR->at<float>(idx, irow, jcol, 2);
-                    } catch (const char *str) {
-                        std::cout << "read exception: " << str<< std::endl;
+                        idx = idxCam + 1 + np * (iti[i] - 1) + ipi[k]; 
+                   
+                    if (cache) {
+                        const float* aux = cache->getPixel(idx, irow, jcol);
+                        for (int isp = 0; isp < planes; isp++)
+                        {
+                            RGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                        }
                     }
-                    
-                    //get_pixel(0, irow, jcol, idx, aux); // zde je treba zavolat funkci co mi da hodnotu pixelu pro obrazek s indexem idx
-                    for (int isp = 0; isp < planes; isp++)
-                    {
-                        aux[isp] *= wti[i] * wtv[j] * wpi[k] * wpv[l];//pøidání na základì vaha (váhy 0...1) váhy všechy ètyø smìrù
-                        RGB[isp] += aux[isp];
+                    else {
+                        float aux[3];
+                        disk->getPixel(idx, irow, jcol, aux);
+                        for (int isp = 0; isp < planes; isp++)
+                        {
+                            RGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                        }
                     }
-
                 }
 
     attenuateElevations(theta_i_BKP, RGB);
@@ -444,8 +422,9 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
         }
 
     // compute texture mapping
-    int irow = (int)(floor(u * (float)nr * uv_scale)) % nr;
-    int jcol = (int)(floor(v * (float)nc * uv_scale)) % nc;
+    //abs u and v because mitsuba scene matpreview.xml have negative UV coordinates.
+    int irow = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
+    int jcol = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
 
     for (int isp = 0; isp < 3; isp++)
         RGB[isp] = 0.f;
@@ -454,26 +433,23 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
     for (int i = 0; i < 9; i++)
     {
         int idx = ni * viewPos[i] + illuPos[i];
-        try {
-            aux[0] = bigR->at<float>(idx, irow, jcol, 0);
-            aux[1] = bigR->at<float>(idx, irow, jcol, 1);
-            aux[2] = bigR->at<float>(idx, irow, jcol, 2);
+        if (cache) {
+            const float* aux = cache->getPixel(idx, irow, jcol);
+            for (int isp = 0; isp < 3; isp++)
+                RGB[isp] += texWeights[i] * aux[isp];
         }
-        catch (const char* str) {
-            std::cout << "read exception: " << str << std::endl;
+        else {
+            float aux[3];
+            disk->getPixel(idx, irow, jcol, aux);
+            for (int isp = 0; isp < 3; isp++)
+                RGB[isp] += texWeights[i] * aux[isp];
         }
-
-        for (int isp = 0; isp < 3; isp++)
-            RGB[isp] += texWeights[i] * aux[isp];
+      
     }
-
+    // soft transfer on shadow boundaries
     attenuateElevations(theta_i_BKP, RGB);
 
     XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
     //clamp RGB values, measure data could be negative, need clamp this data to zero
     clampToZero(RGB, 3);
-    // soft transfer on shadow boundaries
-
-
-
 }

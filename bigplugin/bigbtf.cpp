@@ -70,7 +70,7 @@ public:
         Spectrum spect;
         BSDFSample3f bs = zero<BSDFSample3f>();
         active &= cos_theta_i > 0.f;
-        if (unlikely(none_or<false>(active) || !ctx.is_enabled(BSDFFlags::DiffuseReflection)))
+        if (unlikely(none_or<false>(active) || !ctx.is_enabled(BSDFFlags::DiffuseReflection)) || cos_theta_i <= 0)
             return { bs, 0.f };
         bs.wo                = warp::square_to_cosine_hemisphere(sample2);
         bs.pdf               = warp::square_to_cosine_hemisphere_pdf(bs.wo);
@@ -85,7 +85,7 @@ public:
         Vector2f duv_dx = si.duv_dx;
         Vector2f duv_dy = si.duv_dy;
         float width = max(max(duv_dx[0], duv_dx[1]), max(duv_dy[0], duv_dy[1]));
-        Log(Info, "width \"%d\" ", width);
+        //(Info, "width \"%d\" ", width);
         //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
         float RGB[3];
         big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,  RGB); // get RGB value from BIG file,  UV coordinate
