@@ -8,8 +8,8 @@
 using namespace mif;
 using namespace mif::directions;
 using namespace mif::mipmap;
-enum class Distribution { uniform, UBO, none};
-static std::unordered_map<std::string, Distribution > const table = { {"uniform",Distribution::uniform}, {"UBO81x81",Distribution::UBO} };
+enum class Distribution { uniform, UBO, BTFthtd, BTFthph, none };
+static std::unordered_map<std::string, Distribution > const table = { {"uniform",Distribution::uniform}, {"UBO81x81",Distribution::UBO}, {"CoatingRegular", Distribution::BTFthtd}, {"CoatingSpecial", Distribution::BTFthph} };
 Distribution parse(std::string str) {
     auto it = table.find(str);
     if (it != table.end())
@@ -18,14 +18,19 @@ Distribution parse(std::string str) {
         return Distribution::none;
 }
 
+
 class BigRender
 {
 private:
     int nr, nc, planes, nimg;
     int ni, nv;
+    ///another name nth
     int ntv;
+    ///another name ntd
     int nti;
+    ///another names: step th
     float step_t;
+    ///another names: step ph, step td
     float step_p;
     int np;               //! number of azimuths
     float r2d;
@@ -53,6 +58,13 @@ private:
     //memory init and clear
     float** allocation2(int nrl, int nrh, int ncl, int nch);
     void freemem2(float** m, int nrl, int nrh, int ncl, int nch);
+
+    ///methods to work with half vector codes from Jiri Filip
+    //Half vector convert from Jiri Filip
+    void ConvertThetaPhiToHalfDiff(float theta_in, float fi_in, float theta_out, float fi_out, float& theta_half, float& fi_half, float& theta_diff, float& fi_diff);
+    void normalize(float* v);
+    void cross_product(float* v1, float* v2, float* out);
+    void rotate_vector(float* vector, float* axis, float angle, float* out);
    
     
 
@@ -68,14 +80,16 @@ public:
     void getPixelUniform(float& u, float &v, float &theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
     //get pixel from BIG file
     void getPixelCubeMaps(float &u, float &v, float& theta_i, float& phi_i, float &theta_v, float& phi_v, float RGB[]);
+    //get pixel from BTFthph mif file
+    void getPixelBTFthph(float& u, float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
+    //get pixel from BTFthtd mif file
+    void getPixelBTFthtd(float& u, float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
     //Convert XYZ to sRGB 0-1 format
     void XYZtoRGB(float XYZ[]);
     // soft transfer on shadow boundaries
     void attenuateElevations(float theta_i, float RGB[]);
     //set tiling scale of UV coordinates
     void setScale(float scale);
-    //maximal mipmap level
-    int mipmapLevel;
    
 
 };//--- RenderBIG -------------------------------------------------------
@@ -145,7 +159,6 @@ BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::
     anglesUBO = allocation2(0, 80, 0, 8); // position [8] for an ideal mirroring direction
     generateDirectionsUBO(anglesUBO);
 
-
     // cubemaps creation
     CM = new TCubeMap(path_to_cube_maps.data());
 }
@@ -153,14 +166,38 @@ BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::
 
 BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size) {
     init(bigname,cache, cache_size);
-
-    this->ntv = 5;
-    this->nti = 6;
-    this->step_t = 15.f;
-    this->step_p = 30.f;
-    this->np = (int)(360.f / step_p);//kroky na otoèku
-    this->ni = 1 + np * (nti - 1);//množství smìrù osvìtlení 
-    this->nv = np * ntv;//pro kamery
+    switch (dist)
+    {
+    case Distribution::uniform:
+        this->ntv = 5;
+        this->nti = 6;
+        this->step_t = 15.f;
+        this->step_p = 30.f;
+        this->np = (int)(360.f / step_p);//kroky na otoèku
+        this->ni = 1 + np * (nti - 1);//množství smìrù osvìtlení 
+        this->nv = np * ntv;//pro kamery
+        break;
+    case Distribution::UBO:
+        throw "MIF file is UBO file and no path to cubemaps added, add in scene file path to file - <string name=\"cubemap_path\" value=\"cubemaps / 081 / 0256\"/> ";
+        break;
+    case Distribution::BTFthtd:
+        this->step_t = 5.f;
+        this->step_p = 15.f;
+        this->nti = 90.f / step_t;
+        this->ntv = 90.f / step_p;
+        break;
+    case Distribution::BTFthph:
+        this->step_t = 5.f; 
+        this->step_p = 30.f; 
+        this->np = (int)(360.f / step_p);
+        this->nv = 90 / step_t;
+        break;
+    case Distribution::none:
+        break;
+    default:
+        break;
+    }
+    
 }
 
 
@@ -262,6 +299,12 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
     case Distribution::UBO:
         getPixelCubeMaps(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
         break;
+    case Distribution::BTFthtd:
+        getPixelBTFthtd(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
+        break;
+    case Distribution::BTFthph:
+        getPixelBTFthph(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
+        break;
     default:
         break;
     }
@@ -357,7 +400,7 @@ void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i
     int jcol = (int) (floor(abs(v) * (float) nc * uv_scale)) % nc;
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
-
+    float aux2[3];
     for (int j = 0; j < 2; j++)
         for (int l = 0; l < 2; l++)
             for (int i = 0; i < 2; i++)
@@ -378,11 +421,10 @@ void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i
                         }
                     }
                     else {
-                        float aux[3];
-                        disk->getPixel(idx, irow, jcol, aux);
+                        disk->getPixel(idx, irow, jcol, aux2);
                         for (int isp = 0; isp < planes; isp++)
                         {
-                            RGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                            RGB[isp] += aux2[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
                         }
                     }
                 }
@@ -429,7 +471,7 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
     for (int isp = 0; isp < 3; isp++)
         RGB[isp] = 0.f;
 
-    float aux[3];
+    float aux2[3];
     for (int i = 0; i < 9; i++)
     {
         int idx = ni * viewPos[i] + illuPos[i];
@@ -439,10 +481,9 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
                 RGB[isp] += texWeights[i] * aux[isp];
         }
         else {
-            float aux[3];
-            disk->getPixel(idx, irow, jcol, aux);
+            disk->getPixel(idx, irow, jcol, aux2);
             for (int isp = 0; isp < 3; isp++)
-                RGB[isp] += texWeights[i] * aux[isp];
+                RGB[isp] += texWeights[i] * aux2[isp];
         }
       
     }
@@ -452,4 +493,252 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
     XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
     //clamp RGB values, measure data could be negative, need clamp this data to zero
     clampToZero(RGB, 3);
+}
+
+//*****BTFthph********
+void BigRender::normalize(float* v)
+{
+    float vn = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    v[0] /= vn;
+    v[1] /= vn;
+    v[2] /= vn;
+}
+
+void BigRender::cross_product(float* v1, float* v2, float* out)
+{
+    out[0] = v1[1] * v2[2] - v1[2] * v2[1];
+    out[1] = v1[2] * v2[0] - v1[0] * v2[2];
+    out[2] = v1[0] * v2[1] - v1[1] * v2[0];
+}
+
+void BigRender::rotate_vector(float* vector, float* axis, float angle, float* out)
+{
+    float temp;
+    float cross[3];
+    float cos_ang = cos(angle);
+    float sin_ang = sin(angle);
+
+    out[0] = vector[0] * cos_ang;
+    out[1] = vector[1] * cos_ang;
+    out[2] = vector[2] * cos_ang;
+
+    temp = axis[0] * vector[0] + axis[1] * vector[1] + axis[2] * vector[2];
+    temp = temp * (1.0 - cos_ang);
+
+    out[0] += axis[0] * temp;
+    out[1] += axis[1] * temp;
+    out[2] += axis[2] * temp;
+
+    cross_product(axis, vector, cross);
+
+    out[0] += cross[0] * sin_ang;
+    out[1] += cross[1] * sin_ang;
+    out[2] += cross[2] * sin_ang;
+}
+//code from Jiri Filip 
+void BigRender::ConvertThetaPhiToHalfDiff(float theta_in, float fi_in, float theta_out, float fi_out,
+    float& theta_half, float& fi_half, float& theta_diff, float& fi_diff)
+{
+    // compute in vector
+    float in_vec_z = cos(theta_in);
+    float proj_in_vec = sin(theta_in);
+    float in_vec_x = proj_in_vec * cos(fi_in);
+    float in_vec_y = proj_in_vec * sin(fi_in);
+    float in[3] = { in_vec_x,in_vec_y,in_vec_z };
+    normalize(in);
+
+    // compute out vector
+    float out_vec_z = cos(theta_out);
+    float proj_out_vec = sin(theta_out);
+    float out_vec_x = proj_out_vec * cos(fi_out);
+    float out_vec_y = proj_out_vec * sin(fi_out);
+    float out[3] = { out_vec_x,out_vec_y,out_vec_z };
+    normalize(out);
+
+    // compute halfway vector
+    float half_x = (in[0] + out[0]) / 2.0f;
+    float half_y = (in[1] + out[1]) / 2.0f;
+    float half_z = (in[2] + out[2]) / 2.0f;
+    float half[3] = { half_x,half_y,half_z };
+    normalize(half);
+
+    // compute  theta_half, fi_half
+    theta_half = acos(half[2]);
+    fi_half = atan2(half[1], half[0]);
+
+    float bi_normal[3] = { 0.0, 1.0, 0.0 };
+    float normal[3] = { 0.0, 0.0, 1.0 };
+    float temp[3];
+    float diff[3];
+
+    // compute diff vector
+    rotate_vector(in, normal, -fi_half, temp);
+    rotate_vector(temp, bi_normal, -theta_half, diff);
+    normalize(diff);
+
+    // compute  theta_diff, fi_diff
+    theta_diff = acos(diff[2]);
+    fi_diff = atan2(diff[1], diff[0]);
+
+    if (fi_half < 0.f)
+        fi_half += 2.f * PI;
+    if (fi_half >= 2.f * PI)
+        fi_half -= 2.f * PI;
+
+    if (fi_diff < 0.f)
+        fi_diff += 2.f * PI;
+    if (fi_diff >= 2.f * PI)
+        fi_diff -= 2.f * PI;
+}
+
+void BigRender::getPixelBTFthph(float& u, float& v, float& theta_i, float& phi_i,
+    float& theta_v, float& phi_v, float RGB[]) {
+    float th, ph, td, pd;
+    ConvertThetaPhiToHalfDiff(theta_i, phi_i, theta_v, phi_v, th, ph, td, pd);
+
+    int nth = 90.f / step_t;
+    int nph = 360.f / step_p;
+
+    int ith[2] = { 0,0 }, iph[2] = { 0,0 };
+
+    int nlth = 1;
+    float aux;
+    if (nlth) // quadratic mapping of theta_h
+    {
+        for (int i = 0; i < nth; i++)
+        {
+            aux = (float)(i * step_t);
+            if (r2d * th > aux * aux / 90.f)
+                ith[0] = i;
+        }
+    } 	else // linear mapping of theta_h
+        ith[0] = (int)floor((r2d * th) / step_t);
+
+    if (ith[0] > nth - 2)
+        ith[0] = nth - 2;
+    ith[1] = ith[0] + 1;
+
+    iph[0] = (int)floor((r2d * ph) / step_p);
+    iph[1] = iph[0] + 1;
+
+    // compute weights ----------------------------------------------
+    float wth[2], wph[2], sum;
+    if (nlth)
+    {
+        aux = (float)(ith[0] * step_t);
+        wth[1] = r2d * th - aux * aux / 90.f;
+        aux = (float)(ith[1] * step_t);
+        wth[0] = aux * aux / 90.f - r2d * th;
+    } 	else
+    {
+        wth[1] = r2d * th - step_t * ith[0];
+        wth[0] = step_t * ith[1] - r2d * th;
+    }
+
+    sum = wth[0] + wth[1];
+    wth[0] /= sum;
+    wth[1] /= sum;
+
+    wph[1] = r2d * ph - step_p * iph[0];
+    wph[0] = step_p * iph[1] - r2d * ph;
+
+    sum = wph[0] + wph[1];
+    wph[0] /= sum;
+    wph[1] /= sum;
+
+    iph[0] += 4;  // rotating anisotropy axis
+    iph[1] = iph[0] + 1;
+
+    if (iph[0] >= nph)
+        iph[0] -= nph;
+    if (iph[1] >= nph)
+        iph[1] -= nph;
+
+    int irow = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
+    int jcol = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
+    for (int isp = 0; isp < planes; isp++)
+        RGB[isp] = 0.f;
+    float aux2[3];
+    for (int i = 0; i < 2; i++)
+        for (int k = 0; k < 2; k++)
+        {
+            int idx = ith[i] * nph + iph[k];
+            float w = wth[i] * wph[k];
+            if (cache) {
+                const float* aux = cache->getPixel(idx, irow, jcol);
+                for (int isp = 0; isp < planes; isp++)
+                    RGB[isp] += w * aux[isp];
+            } else {
+                disk->getPixel(idx, irow, jcol, aux2);
+                for (int isp = 0; isp < planes; isp++)
+                    RGB[isp] += w * aux2[isp];
+            }
+            
+        }
+
+    attenuateElevations(theta_i, RGB);
+    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
+    //clamp RGB values, measure data could be negative, need clamp this data to zero
+    clampToZero(RGB, 3);
+}
+
+void BigRender::getPixelBTFthtd(float& u, float& v, float& theta_i, float& phi_i,
+    float& theta_v, float& phi_v, float RGB[]) {
+    float aux1;
+
+    // convert to HD param ----------------------------------------
+    float th, ph, td, pd;
+    ConvertThetaPhiToHalfDiff(theta_i, phi_i, theta_v, phi_v, th, ph, td, pd);
+    int nth = 90.f / step_t;
+    int ntd = 90.f / step_p;
+
+    int ith[2] = { 0,0 }, itd[2] = { 0,0 };
+
+    int nlth = 1;
+    if (nlth) // quadratic mapping of theta_h
+    {
+        for (int i = 0; i < nth; i++)
+        {
+            aux1 = (float)(i * step_t);
+            if (r2d * th > aux1 * aux1 / 90.f)
+                ith[0] = i;
+        }
+    } 	else // linear mapping of theta_h
+        ith[0] = (int)floor((r2d * th) / step_t);
+
+    if (ith[0] > nth - 2)
+        ith[0] = nth - 2;
+    ith[1] = ith[0] + 1;
+
+    itd[0] = (int)floor((r2d * td) / step_p);
+    if (itd[0] > ntd - 2)
+        itd[0] = ntd - 2;
+    itd[1] = itd[0] + 1;
+
+    // compute weights ----------------------------------------------
+    float wth[2], wtd[2], sum;
+    if (nlth)
+    {
+        aux1 = (float)(ith[0] * step_t);
+        wth[1] = r2d * th - aux1 * aux1 / 90.f;
+        aux1 = (float)(ith[1] * step_t);
+        wth[0] = aux1 * aux1 / 90.f - r2d * th;
+    } 	else
+    {
+        wth[1] = r2d * th - step_t * ith[0];
+        wth[0] = step_t * ith[1] - r2d * th;
+    }
+
+    sum = wth[0] + wth[1];
+    wth[0] /= sum;
+    wth[1] /= sum;
+
+    wtd[1] = r2d * td - step_p * itd[0];
+    wtd[0] = step_p * itd[1] - r2d * td;
+    sum = wtd[0] + wtd[1];
+    wtd[0] /= sum;
+    wtd[1] /= sum;
+
+    attenuateElevations(theta_i, RGB);
+
 }

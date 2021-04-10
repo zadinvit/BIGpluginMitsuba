@@ -41,7 +41,13 @@ public:
             }
             big_render = new BigRender(filename, useMemory, memory, pathToCubeMap);
         } else {
-            big_render = new BigRender(filename, useMemory, memory);
+            try {
+                big_render = new BigRender(filename, useMemory, memory);
+            }
+            catch (const char* str) {
+                Log(Error, "BigRender init error: %s", str);
+            }
+            
         }
 
         if (props.has_property("scale")) {
