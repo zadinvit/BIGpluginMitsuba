@@ -21,7 +21,7 @@ public:
 
     BigBTF(const Properties &props) : Base(props) {
         int bsdf_index = 0;
-
+        m_flags = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide;
         std::string filename = props.string("big_filepath");
         Log(Info, "Loading file \"%s\" ..", filename);
         uint64_t memory = 0;
@@ -49,16 +49,24 @@ public:
             }
             
         }
+        if (props.has_property("mipmap")) {
+            bool mipmap = props.bool_("mipmap");
+            if (mipmap) {
+                if (big_render->mip.isotropic.size() > 0) {
+                    big_render->turnOnMipmapping();
+                    m_flags = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide| BSDFFlags::NeedsDifferentials;
+                    Log(Info, "Renderer using mipmaping.");
+                } else {
+                    Log(Error, "BigRender Mif file %s don't have mipmaps and you want use mipmapping.", filename);
+                }
+            }
+        }
 
         if (props.has_property("scale")) {
             float scale = props.float_("scale");
             big_render->setScale(scale);
         }
 
-
-       
-      
-        m_flags    = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide | BSDFFlags::NeedsDifferentials;
         m_components.push_back(m_flags);
 
     }
@@ -88,13 +96,15 @@ public:
         float_t theta_o = acos(bs.wo[2]);
         float_t phi_i = atan2(si.wi[1], si.wi[0]);
         float_t phi_o = atan2(bs.wo[1], bs.wo[0]);
-        Vector2f duv_dx = si.duv_dx;
-        Vector2f duv_dy = si.duv_dy;
-        float width = max(max(duv_dx[0], duv_dx[1]), max(duv_dy[0], duv_dy[1]));
+        float level = 0;
+        if (big_render->mipmapping) {
+            float width = max(max(si.duv_dx[0], si.duv_dx[1]), max(si.duv_dy[0], si.duv_dy[1]));
+            level = float(big_render->maxMipLevel) + log2(width)+4;
+        }
         //(Info, "width \"%d\" ", width);
         //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
         float RGB[3];
-        big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,  RGB); // get RGB value from BIG file,  UV coordinate
+        big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o, level, RGB ); // get RGB value from BIG file,  UV coordinate
         spect = Color3f(RGB[0], RGB[1],RGB[2]); //M_PI *  / Frame3f::cos_theta(bs.wo)* M_PI /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
         return { bs, select(active,spect,0.0f) }; // 
     }
@@ -114,12 +124,19 @@ public:
         else {
             float_t theta_i      = acos(si.wi[2]);
             float_t theta_o      = acos(wo[2]);
+            if (std::isnan(theta_o)) { //sometimes pathtracer for light return wo[2] > 1.0000 and this cause errror
+                return Spectrum(0.0f);
+            }
             float_t phi_i        = atan2(si.wi[1], si.wi[0]);
             float_t phi_o        = atan2(wo[1], wo[0]);
+            float level = 0;
+            if (big_render->mipmapping) {
+                float width = max(max(si.duv_dx[0], si.duv_dx[1]), max(si.duv_dy[0], si.duv_dy[1]));
+                level = float(big_render->maxMipLevel) + log2(width);
+                //std::cout << level << " log width"<< log2(width) << std::endl;
+            }
             float RGB[3];
-            big_render->getPixel(
-                si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o,
-                RGB); // get RGB value from BIG file,  UV coordinate
+            big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o, level, RGB); // get RGB value from BIG file,  UV coordinate
             //invPI for darken lights spots and cost thete to darken light part
             spect = Color3f(RGB[0], RGB[1], RGB[2]) * cos_theta_o * math::InvPi<float>; //* math::InvPi<float>  * cos_theta_o cosine term. 
         }

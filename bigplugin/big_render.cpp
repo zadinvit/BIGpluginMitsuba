@@ -38,7 +38,6 @@ private:
     float** anglesUBO = NULL; //! array of angles: index,theta,phi,[x,y,z] coord. of individual directions
 
 
-
     TCubeMap* CM = NULL;      // cubemaps
     //big::BigCoreRead * bigR; //BIG read structure
     MIFbtf mif;
@@ -65,6 +64,8 @@ private:
     void normalize(float* v);
     void cross_product(float* v1, float* v2, float* out);
     void rotate_vector(float* vector, float* axis, float angle, float* out);
+    //transform UV coordinates to image coordinates and apply mipmap level
+    void getCoordinates(const float &u, const float &v, float& level, int& row, int& col);
    
     
 
@@ -75,21 +76,29 @@ public:
     BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps);
     ~BigRender();
     //get pixel from BIG file
-    void getPixel(float u, float v, float theta_i, float phi_i, float theta_v, float phi_v, float RGB[]);
+    void getPixel(const float &u, const float &v, float &theta_i, float &phi_i, float &theta_v, float &phi_v, float &level, float RGB[]);
     //get pixel from BIG file
-    void getPixelUniform(float& u, float &v, float &theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
+    void getPixelUniform(const float& u, const float &v, float &theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
     //get pixel from BIG file
-    void getPixelCubeMaps(float &u, float &v, float& theta_i, float& phi_i, float &theta_v, float& phi_v, float RGB[]);
+    void getPixelCubeMaps(const float &u, const float &v, float& theta_i, float& phi_i, float &theta_v, float& phi_v, float& level, float RGB[]);
     //get pixel from BTFthph mif file
-    void getPixelBTFthph(float& u, float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
+    void getPixelBTFthph(const float& u, const float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
     //get pixel from BTFthtd mif file
-    void getPixelBTFthtd(float& u, float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
+    void getPixelBTFthtd(const float& u, const float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
     //Convert XYZ to sRGB 0-1 format
     void XYZtoRGB(float XYZ[]);
     // soft transfer on shadow boundaries
     void attenuateElevations(float theta_i, float RGB[]);
     //set tiling scale of UV coordinates
     void setScale(float scale);
+    //turn on mipmapping 
+    void turnOnMipmapping();
+    //information about mipmaps
+    Mipmap mip;
+    // use render mipmapping
+    bool mipmapping = false;
+    // max level of mipmap
+    int maxMipLevel;
    
 
 };//--- RenderBIG -------------------------------------------------------
@@ -144,6 +153,11 @@ void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
         this->nc = this->disk->getImageWidth(0);
         this->nimg = this->disk->getNumberOfImages();
         this->planes = this->disk->getImageNumberOfPlanes(0);
+    }
+    mip =  mif.getBtfMipmap("btf0");
+    maxMipLevel = mip.isotropic.size();
+    if (mip.isotropic.size() > 0) {
+        this->nc = mip.isotropic[0].cols;
     }
     Directions directions = mif.getBtfDirections("btf0");
     this->dist = parse(directions.name);
@@ -219,6 +233,10 @@ void BigRender::setScale(float scale) {
     uv_scale = scale;
 }
 
+void BigRender::turnOnMipmapping() {
+    mipmapping = true;
+}
+
 
 void BigRender::clampToZero(float array[], int size) {
     for (int i = 0; i < size; i++) {
@@ -289,15 +307,29 @@ void BigRender::attenuateElevations(float theta_i, float RGB[])
     }
 }
 
-void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
-    float theta_v, float phi_v, float RGB[]) {
+void BigRender::getCoordinates(const float &u, const float &v, float& level, int& row, int &col) {
+    if (level <= 0) {
+        //abs u and v because mitsuba scene matpreview.xml have negative UV coordinates.
+        row = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
+        col = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
+    } else {
+        Item lvl = mip.isotropic[(int)level];
+        int tmprow = (int)(floor(abs(u) * (float)lvl.rows * uv_scale)) % lvl.rows;
+        int tmpcol = (int)(floor(abs(v) * (float)lvl.cols * uv_scale)) % lvl.cols;
+        row = tmprow + lvl.y;
+        col = tmpcol + lvl.x;
+    }
+}
+
+void BigRender::getPixel(const float &u, const float &v, float &theta_i, float &phi_i,
+    float &theta_v, float& phi_v, float &level, float RGB[]) {
     switch (dist)
     {
     case Distribution::uniform:
         getPixelUniform(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
         break;
     case Distribution::UBO:
-        getPixelCubeMaps(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
+        getPixelCubeMaps(u, v, theta_i, phi_i, theta_v, phi_v, level, RGB);
         break;
     case Distribution::BTFthtd:
         getPixelBTFthtd(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
@@ -312,7 +344,7 @@ void BigRender::getPixel(float u, float v, float theta_i, float phi_i,
 }
 
 //need to rework y,x are float we need recompute size base on texture image size
-void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i,
+void BigRender::getPixelUniform(const float& u, const float& v, float &theta_i, float &phi_i,
                          float& theta_v, float& phi_v, float RGB[]) {
     //radian versions of angles
     float theta_i_BKP = theta_i; 
@@ -437,8 +469,8 @@ void BigRender::getPixelUniform(float& u, float& v, float &theta_i, float &phi_i
     return;
 }
 
-void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_i,
-    float &theta_v, float& phi_v, float RGB[]) {
+void BigRender::getPixelCubeMaps(const float& u, const float& v, float &theta_i, float &phi_i,
+    float &theta_v, float& phi_v, float &level, float RGB[]) {
     //radian versions of angles
     float theta_i_BKP = theta_i;
 
@@ -464,10 +496,9 @@ void BigRender::getPixelCubeMaps(float& u, float& v, float &theta_i, float &phi_
         }
 
     // compute texture mapping
-    //abs u and v because mitsuba scene matpreview.xml have negative UV coordinates.
-    int irow = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
-    int jcol = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
-
+    int irow = 0; 
+    int jcol = 0; 
+    getCoordinates(u, v, level, irow, jcol);
     for (int isp = 0; isp < 3; isp++)
         RGB[isp] = 0.f;
 
@@ -591,7 +622,7 @@ void BigRender::ConvertThetaPhiToHalfDiff(float theta_in, float fi_in, float the
         fi_diff -= 2.f * PI;
 }
 
-void BigRender::getPixelBTFthph(float& u, float& v, float& theta_i, float& phi_i,
+void BigRender::getPixelBTFthph(const float& u, const float& v, float& theta_i, float& phi_i,
     float& theta_v, float& phi_v, float RGB[]) {
     float th, ph, td, pd;
     ConvertThetaPhiToHalfDiff(theta_i, phi_i, theta_v, phi_v, th, ph, td, pd);
@@ -682,7 +713,7 @@ void BigRender::getPixelBTFthph(float& u, float& v, float& theta_i, float& phi_i
     clampToZero(RGB, 3);
 }
 
-void BigRender::getPixelBTFthtd(float& u, float& v, float& theta_i, float& phi_i,
+void BigRender::getPixelBTFthtd(const float& u, const float& v, float& theta_i, float& phi_i,
     float& theta_v, float& phi_v, float RGB[]) {
     float aux1;
 
