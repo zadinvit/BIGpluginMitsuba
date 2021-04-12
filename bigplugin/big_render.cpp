@@ -78,13 +78,13 @@ public:
     //get pixel from BIG file
     void getPixel(const float &u, const float &v, float &theta_i, float &phi_i, float &theta_v, float &phi_v, float &level, float RGB[]);
     //get pixel from BIG file
-    void getPixelUniform(const float& u, const float &v, float &theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
+    void getPixelUniform(const float& u, const float &v, float &theta_i, float& phi_i, float& theta_v, float& phi_v, float& level, float RGB[]);
     //get pixel from BIG file
     void getPixelCubeMaps(const float &u, const float &v, float& theta_i, float& phi_i, float &theta_v, float& phi_v, float& level, float RGB[]);
     //get pixel from BTFthph mif file
-    void getPixelBTFthph(const float& u, const float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
+    void getPixelBTFthph(const float& u, const float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float& level, float RGB[]);
     //get pixel from BTFthtd mif file
-    void getPixelBTFthtd(const float& u, const float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float RGB[]);
+    void getPixelBTFthtd(const float& u, const float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, float& level, float RGB[]);
     //Convert XYZ to sRGB 0-1 format
     void XYZtoRGB(float XYZ[]);
     // soft transfer on shadow boundaries
@@ -326,16 +326,16 @@ void BigRender::getPixel(const float &u, const float &v, float &theta_i, float &
     switch (dist)
     {
     case Distribution::uniform:
-        getPixelUniform(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
+        getPixelUniform(u, v, theta_i, phi_i, theta_v, phi_v, level, RGB);
         break;
     case Distribution::UBO:
         getPixelCubeMaps(u, v, theta_i, phi_i, theta_v, phi_v, level, RGB);
         break;
     case Distribution::BTFthtd:
-        getPixelBTFthtd(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
+        getPixelBTFthtd(u, v, theta_i, phi_i, theta_v, phi_v, level, RGB);
         break;
     case Distribution::BTFthph:
-        getPixelBTFthph(u, v, theta_i, phi_i, theta_v, phi_v, RGB);
+        getPixelBTFthph(u, v, theta_i, phi_i, theta_v, phi_v, level, RGB);
         break;
     default:
         break;
@@ -345,7 +345,7 @@ void BigRender::getPixel(const float &u, const float &v, float &theta_i, float &
 
 //need to rework y,x are float we need recompute size base on texture image size
 void BigRender::getPixelUniform(const float& u, const float& v, float &theta_i, float &phi_i,
-                         float& theta_v, float& phi_v, float RGB[]) {
+                         float& theta_v, float& phi_v,float& level, float RGB[]) {
     //radian versions of angles
     float theta_i_BKP = theta_i; 
     float theta_v_BKP = theta_v;
@@ -427,9 +427,9 @@ void BigRender::getPixelUniform(const float& u, const float& v, float &theta_i, 
         ipv[1] = 0;
 
     // compute texture mapping
-    //abs u and v because mitsuba scene matpreview.xml have negative UV coordinates.
-    int irow = (int) (floor(abs(u) * (float) nr * uv_scale)) % nr;
-    int jcol = (int) (floor(abs(v) * (float) nc * uv_scale)) % nc;
+    int irow = 0;
+    int jcol = 0;
+    getCoordinates(u, v, level, irow, jcol);
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
     float aux2[3];
@@ -623,7 +623,7 @@ void BigRender::ConvertThetaPhiToHalfDiff(float theta_in, float fi_in, float the
 }
 
 void BigRender::getPixelBTFthph(const float& u, const float& v, float& theta_i, float& phi_i,
-    float& theta_v, float& phi_v, float RGB[]) {
+    float& theta_v, float& phi_v, float& level, float RGB[]) {
     float th, ph, td, pd;
     ConvertThetaPhiToHalfDiff(theta_i, phi_i, theta_v, phi_v, th, ph, td, pd);
 
@@ -685,8 +685,9 @@ void BigRender::getPixelBTFthph(const float& u, const float& v, float& theta_i, 
     if (iph[1] >= nph)
         iph[1] -= nph;
 
-    int irow = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
-    int jcol = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
+    int irow = 0;
+    int jcol = 0;
+    getCoordinates(u, v, level, irow, jcol);
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
     float aux2[3];
@@ -714,7 +715,7 @@ void BigRender::getPixelBTFthph(const float& u, const float& v, float& theta_i, 
 }
 
 void BigRender::getPixelBTFthtd(const float& u, const float& v, float& theta_i, float& phi_i,
-    float& theta_v, float& phi_v, float RGB[]) {
+    float& theta_v, float& phi_v, float& level, float RGB[]) {
     float aux1;
 
     // convert to HD param ----------------------------------------
@@ -770,14 +771,12 @@ void BigRender::getPixelBTFthtd(const float& u, const float& v, float& theta_i, 
     wtd[0] /= sum;
     wtd[1] /= sum;
 
-    int irow = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
-    int jcol = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
+    int irow = 0;
+    int jcol = 0;
+    getCoordinates(u, v, level, irow, jcol);
+
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
-
-    RGB[0] = 0.f;
-    RGB[1] = 0.f;
-    RGB[2] = 0.f;
     float aux2[3];
     for (int i = 0; i < 2; i++)
         for (int j = 0; j < 2; j++)
