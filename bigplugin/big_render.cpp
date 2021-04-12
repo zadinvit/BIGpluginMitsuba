@@ -155,7 +155,7 @@ void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
         this->planes = this->disk->getImageNumberOfPlanes(0);
     }
     mip =  mif.getBtfMipmap("btf0");
-    maxMipLevel = mip.isotropic.size();
+    maxMipLevel = mip.isotropic.size()-1;
     if (mip.isotropic.size() > 0) {
         this->nc = mip.isotropic[0].cols;
     }
@@ -770,6 +770,34 @@ void BigRender::getPixelBTFthtd(const float& u, const float& v, float& theta_i, 
     wtd[0] /= sum;
     wtd[1] /= sum;
 
+    int irow = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
+    int jcol = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
+    for (int isp = 0; isp < planes; isp++)
+        RGB[isp] = 0.f;
+
+    RGB[0] = 0.f;
+    RGB[1] = 0.f;
+    RGB[2] = 0.f;
+    float aux2[3];
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < 2; j++)
+        {
+            int idx =  ith[i] * (90.f / step_p) + itd[j];
+            float w = wth[i] * wtd[j];
+            if (cache) {
+                const float* aux = cache->getPixel(idx, irow, jcol);
+                for (int isp = 0; isp < planes; isp++)
+                    RGB[isp] += w * aux[isp];
+            } else {
+                disk->getPixel(idx, irow, jcol, aux2);
+                for (int isp = 0; isp < planes; isp++)
+                    RGB[isp] += w * aux2[isp];
+            }
+        }
+
     attenuateElevations(theta_i, RGB);
+    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
+    //clamp RGB values, measure data could be negative, need clamp this data to zero
+    clampToZero(RGB, 3);
 
 }

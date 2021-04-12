@@ -99,7 +99,7 @@ public:
         float level = 0;
         if (big_render->mipmapping) {
             float width = max(max(si.duv_dx[0], si.duv_dx[1]), max(si.duv_dy[0], si.duv_dy[1]));
-            level = float(big_render->maxMipLevel) + log2(width)+4;
+            level = min(float(big_render->maxMipLevel), 20+ log2(width));
         }
         //(Info, "width \"%d\" ", width);
         //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
@@ -132,7 +132,7 @@ public:
             float level = 0;
             if (big_render->mipmapping) {
                 float width = max(max(si.duv_dx[0], si.duv_dx[1]), max(si.duv_dy[0], si.duv_dy[1]));
-                level = float(big_render->maxMipLevel) + log2(width);
+                level = min(float(big_render->maxMipLevel), 20 + log2(width));
                 //std::cout << level << " log width"<< log2(width) << std::endl;
             }
             float RGB[3];
