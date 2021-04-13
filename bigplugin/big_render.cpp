@@ -167,6 +167,8 @@ void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
 BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps) {
    
     init(bigname, cache, cache_size);
+    if (dist != Distribution::UBO)
+        throw "MIF file is'n UBO file and path to cubemaps added, delete cubamap_path from bsdf definition";
     this->ni = 81;
     this->nv = 81;
     // generating list of angles 
@@ -446,17 +448,21 @@ void BigRender::getPixelUniform(const float& u, const float& v, float &theta_i, 
                         idx = idxCam + 1 + np * (iti[i] - 1) + ipi[k]; 
                    
                     if (cache) {
-                        const float* aux = cache->getPixel(idx, irow, jcol);
-                        for (int isp = 0; isp < planes; isp++)
-                        {
-                            RGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                        if (idx < nimg) { //uniform indexing sometimes go out of range
+                            const float* aux = cache->getPixel(idx, irow, jcol);
+                            for (int isp = 0; isp < planes; isp++)
+                            {
+                                RGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                            }
                         }
                     }
                     else {
-                        disk->getPixel(idx, irow, jcol, aux2);
-                        for (int isp = 0; isp < planes; isp++)
-                        {
-                            RGB[isp] += aux2[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                        if (idx < nimg) {
+                            disk->getPixel(idx, irow, jcol, aux2);
+                            for (int isp = 0; isp < planes; isp++)
+                            {
+                                RGB[isp] += aux2[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                            }
                         }
                     }
                 }

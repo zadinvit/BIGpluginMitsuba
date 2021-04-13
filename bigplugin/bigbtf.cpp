@@ -9,6 +9,7 @@
 #include "big_render.cpp"
 #include <ostream>
 
+#define MIPMAPMAP 0;
 
 NAMESPACE_BEGIN(mitsuba)
 
@@ -33,13 +34,18 @@ public:
                 useMemory = true;
             }
         }
-       
+
         if (props.has_property("cubemap_path")) {
             std::string pathToCubeMap = props.string("cubemap_path");
             if (pathToCubeMap.compare(pathToCubeMap.size()-1,1,"/")) {
                 pathToCubeMap += "/";
             }
-            big_render = new BigRender(filename, useMemory, memory, pathToCubeMap);
+            try {
+                big_render = new BigRender(filename, useMemory, memory, pathToCubeMap);
+            }
+            catch (const char* str) {
+                Log(Error, "BigRender init error: %s", str);
+            }
         } else {
             try {
                 big_render = new BigRender(filename, useMemory, memory);
@@ -49,6 +55,7 @@ public:
             }
             
         }
+
         if (props.has_property("mipmap")) {
             bool mipmap = props.bool_("mipmap");
             if (mipmap) {
@@ -98,15 +105,34 @@ public:
         float_t phi_o = atan2(bs.wo[1], bs.wo[0]);
         float level = 0;
         if (big_render->mipmapping) {
-            float width = max(max(si.duv_dx[0], si.duv_dx[1]), max(si.duv_dy[0], si.duv_dy[1]));
-            level = min(float(big_render->maxMipLevel), 20+ log2(width));
+            
+            float width = max(max(si.duv_dx[0] * big_render->mip.isotropic[0].cols, si.duv_dx[1] * big_render->mip.isotropic[0].cols), max(si.duv_dy[0]* big_render->mip.isotropic[0].rows, si.duv_dy[1]* big_render->mip.isotropic[0].rows));
+            level = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
         }
         //(Info, "width \"%d\" ", width);
         //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
         float RGB[3];
+#if MIPMAPMAP == 1
+        if ((int)level <= 0)
+            return{ bs, Color3f(0.0f,0.f,0.f) };
+        else if ((int)level % 3 == 0)
+            return{ bs, Color3f(0.0f,0.0f,1.0f) };
+        else if ((int)level % 3 == 1)
+            return{ bs, Color3f(0.0f,1.0f,0.0f) };
+        else if ((int)level % 3 == 2)
+            return{ bs, Color3f(1.0f,0.0f,0.0f) };
+        else {
+            return{ bs, Color3f(1.0f,1.0f,1.0f) };
+        }
+        /*float one = 1.0f / big_render->maxMipLevel;
+        float color = (int)level * one;*/
+       
+#else // MIPMAPMAP
+
         big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o, level, RGB ); // get RGB value from BIG file,  UV coordinate
         spect = Color3f(RGB[0], RGB[1],RGB[2]); //M_PI *  / Frame3f::cos_theta(bs.wo)* M_PI /cos_theta_o, možná bude fungovat s dìlením a v eval s násobením tímto úhelm cosine term (musím toto konzultovat)
         return { bs, select(active,spect,0.0f) }; // 
+#endif
     }
 
     //Evaluate the BSDF f(wi, wo) or its adjoint version f ^{ * }(wi, wo) and multiply by the cosine foreshortening term.
@@ -122,25 +148,46 @@ public:
             cos_theta_o <= 0)
             return Spectrum(0.0f);
         else {
-            float_t theta_i      = acos(si.wi[2]);
-            float_t theta_o      = acos(wo[2]);
+            float_t theta_i = acos(si.wi[2]);
+            float_t theta_o = acos(wo[2]);
             if (std::isnan(theta_o)) { //sometimes pathtracer for light return wo[2] > 1.0000 and this cause errror
                 return Spectrum(0.0f);
             }
-            float_t phi_i        = atan2(si.wi[1], si.wi[0]);
-            float_t phi_o        = atan2(wo[1], wo[0]);
+            float_t phi_i = atan2(si.wi[1], si.wi[0]);
+            float_t phi_o = atan2(wo[1], wo[0]);
             float level = 0;
             if (big_render->mipmapping) {
-                float width = max(max(si.duv_dx[0], si.duv_dx[1]), max(si.duv_dy[0], si.duv_dy[1]));
-                level = min(float(big_render->maxMipLevel), 20 + log2(width));
+                float width = max(max(si.duv_dx[0] * big_render->mip.isotropic[0].cols, si.duv_dx[1] * big_render->mip.isotropic[0].cols), max(si.duv_dy[0] * big_render->mip.isotropic[0].rows, si.duv_dy[1] * big_render->mip.isotropic[0].rows));
+                level = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
                 //std::cout << level << " log width"<< log2(width) << std::endl;
             }
+#if MIPMAPMAP == 1
+            if ((int)level <= 0)
+                return Color3f(0.0f,0.f,0.f) ;
+            else if ((int)level % 3 == 0)
+                return Color3f(0.0f,0.0f,1.0f) ;
+            else if ((int)level % 3 == 1)
+                return Color3f(0.0f,1.0f,0.0f) ;
+            else if ((int)level % 3 == 2)
+                return Color3f(1.0f,0.0f,0.0f) ;
+            else {
+                return Color3f(1.0f,1.0f,1.0f) ;
+            }
+            /*if (level < 0)
+                level = 0;
+            float one = 1.0f / big_render->maxMipLevel;
+            float color =  (int)level * 0.1f;
+            return Color3f(0.f, color, color);*/
+        }
+#else // MIPMAPMAP
             float RGB[3];
             big_render->getPixel(si.uv[0], si.uv[1], theta_i, phi_i, theta_o, phi_o, level, RGB); // get RGB value from BIG file,  UV coordinate
             //invPI for darken lights spots and cost thete to darken light part
             spect = Color3f(RGB[0], RGB[1], RGB[2]) * cos_theta_o * math::InvPi<float>; //* math::InvPi<float>  * cos_theta_o cosine term. 
         }
         return spect;
+#endif 
+
     }
 
     //Compute the probability per unit solid angle of sampling a given direction
@@ -156,6 +203,31 @@ public:
         
             return warp::square_to_cosine_hemisphere_pdf(wo);
     }
+    //not working... 
+    //float chooseLevel(const Vector2f& d0, const Vector2f& d1, Vector2i size) const {
+    //    float e = 1e-4f;
+
+    //   float du0 = d0[0] * size[0], dv0 = d0[1] * size[1],
+    //    du1 = d1[0] * size[0], dv1 = d1[1] * size[1];
+
+    //        /* Turn the texture-space Jacobian into the coefficients of an
+    //           implicitly defined ellipse. */
+    //   float A = dv0 * dv0 + dv1 * dv1,
+    //              B = -2.0f * (du0 * dv0 + du1 * dv1),
+    //              C = du0 * du0 + du1 * du1,
+    //              F = A * C - B * B * 0.25f;
+
+    //    /* Compute the major and minor radii */
+    //    float root = hypot(A - C, B),
+    //    Aprime = 0.5f * (A + C - root),
+    //    Cprime = 0.5f * (A + C + root),
+    //    majorRadius = Aprime != 0 ? std::sqrt(F / Aprime) : 0,
+    //    minorRadius = Cprime != 0 ? std::sqrt(F / Cprime) : 0;
+    //    float level = 0;
+    //    if (!(minorRadius > 0) || !(majorRadius > 0) || F < 0)        
+    //     level = log2(std::max(majorRadius, e));
+    //    return level;         
+    //}
 
 
     void traverse(TraversalCallback *callback) override {
@@ -181,5 +253,5 @@ protected:
 };
 
 MTS_IMPLEMENT_CLASS_VARIANT(BigBTF, BSDF)
-MTS_EXPORT_PLUGIN(BigBTF, "BlendBSDF material")
+MTS_EXPORT_PLUGIN(BigBTF, "bigbtf plugin")
 NAMESPACE_END(mitsuba)
