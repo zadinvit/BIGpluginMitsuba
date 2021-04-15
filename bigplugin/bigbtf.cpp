@@ -9,6 +9,7 @@
 #include "big_render.cpp"
 #include <ostream>
 
+//1 to generate mipmap levels image
 #define MIPMAPMAP 0;
 
 NAMESPACE_BEGIN(mitsuba)
@@ -56,15 +57,18 @@ public:
             
         }
 
-        if (props.has_property("mipmap")) {
-            bool mipmap = props.bool_("mipmap");
-            if (mipmap) {
-                if (big_render->mip.isotropic.size() > 0) {
-                    big_render->turnOnMipmapping();
-                    m_flags = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide| BSDFFlags::NeedsDifferentials;
-                    Log(Info, "Renderer using mipmaping.");
+        if (props.has_property("filtering")) {
+            std::string filter = props.string("filtering");
+            big_render->setFilter(filter);
+            if (big_render->filter != Filtering::none) {
+                if (big_render->mip.isotropic.size() > 0 || big_render->mip.anisotropic.size()>0) {
+                    m_flags = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide | BSDFFlags::NeedsDifferentials;
+                    Log(Info, "Renderer using %s.", filter);
                 } else {
-                    Log(Error, "BigRender Mif file %s don't have mipmaps and you want use mipmapping.", filename);
+                    Log(Error, "BigRender Mif file %s don't have mipmaps/anizotropy maps and you want use mipmapping/anizotropy filtering.", filename);
+                }
+                if ((big_render->filter == Filtering::ANIZO_1x || big_render->filter == Filtering::ANIZO_4x) && big_render->mip.anisotropic.size() <= 0) {
+                    Log(Error, "BigRender Mif file %s don't have anizotropy maps and you want use anizotropy filtering.", filename);
                 }
             }
         }
@@ -103,23 +107,37 @@ public:
         float_t theta_o = acos(bs.wo[2]);
         float_t phi_i = atan2(si.wi[1], si.wi[0]);
         float_t phi_o = atan2(bs.wo[1], bs.wo[0]);
-        float level = 0;
-        if (big_render->mipmapping) {
-            
-            float width = max(max(si.duv_dx[0] * big_render->mip.isotropic[0].cols, si.duv_dx[1] * big_render->mip.isotropic[0].cols), max(si.duv_dy[0]* big_render->mip.isotropic[0].rows, si.duv_dy[1]* big_render->mip.isotropic[0].rows));
-            level = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
+        BigRender::MipLvl level;
+        if (big_render->filter == Filtering::MIPMAP_LINEAR || big_render->filter == Filtering::MIPMAP_WEIGHTED) {
+            int cols, rows;
+            if (big_render->mip.isotropic.size() > 0) {
+                cols = big_render->mip.isotropic[0].cols;
+                rows = big_render->mip.isotropic[0].rows;
+            } else {
+                cols = big_render->mip.anisotropic[0].cols;
+                rows = big_render->mip.anisotropic[0].rows;
+            }
+            float width = max(max(si.duv_dx[0] * cols, si.duv_dx[1] * cols), max(si.duv_dy[0] * rows, si.duv_dy[1] * rows));
+            level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
+        } else if (big_render->filter == Filtering::ANIZO_1x || big_render->filter == Filtering::ANIZO_4x) {
+            int cols = big_render->mip.anisotropic[0].cols;
+            int rows = big_render->mip.anisotropic[0].rows;
+            float widthx = max(si.duv_dx[0] * cols, si.duv_dx[1] * cols);
+            float widthy = max(si.duv_dy[0] * rows, si.duv_dy[1] * rows);
+            level.levelx = min(float(big_render->mip.anisotropic.width()-1), float(big_render->mip.anisotropic.width() - 1) + log2(widthx));
+            level.levely = min(float(big_render->mip.anisotropic.height() - 1), float(big_render->mip.anisotropic.height() - 1) + log2(widthy));
         }
         //(Info, "width \"%d\" ", width);
         //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
         float RGB[3];
 #if MIPMAPMAP == 1
-        if ((int)level <= 0)
+        if ((int)level.levelx <= 0)
             return{ bs, Color3f(0.0f,0.f,0.f) };
-        else if ((int)level % 3 == 0)
+        else if ((int)level.levelx % 3 == 0)
             return{ bs, Color3f(0.0f,0.0f,1.0f) };
-        else if ((int)level % 3 == 1)
+        else if ((int)level.levelx % 3 == 1)
             return{ bs, Color3f(0.0f,1.0f,0.0f) };
-        else if ((int)level % 3 == 2)
+        else if ((int)level.levelx % 3 == 2)
             return{ bs, Color3f(1.0f,0.0f,0.0f) };
         else {
             return{ bs, Color3f(1.0f,1.0f,1.0f) };
@@ -155,20 +173,28 @@ public:
             }
             float_t phi_i = atan2(si.wi[1], si.wi[0]);
             float_t phi_o = atan2(wo[1], wo[0]);
-            float level = 0;
-            if (big_render->mipmapping) {
-                float width = max(max(si.duv_dx[0] * big_render->mip.isotropic[0].cols, si.duv_dx[1] * big_render->mip.isotropic[0].cols), max(si.duv_dy[0] * big_render->mip.isotropic[0].rows, si.duv_dy[1] * big_render->mip.isotropic[0].rows));
-                level = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
+            BigRender::MipLvl level;
+            if (big_render->filter == Filtering::MIPMAP_LINEAR || big_render->filter == Filtering::MIPMAP_WEIGHTED) {
+                int cols, rows;
+                if (big_render->mip.isotropic.size() > 0) {
+                    cols = big_render->mip.isotropic[0].cols;
+                    rows = big_render->mip.isotropic[0].rows;
+                } else {
+                    cols = big_render->mip.anisotropic[0].cols;
+                    rows = big_render->mip.anisotropic[0].rows;
+                }
+                float width = max(max(si.duv_dx[0] * cols, si.duv_dx[1] * cols), max(si.duv_dy[0] * rows , si.duv_dy[1] * rows));
+                level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
                 //std::cout << level << " log width"<< log2(width) << std::endl;
             }
 #if MIPMAPMAP == 1
-            if ((int)level <= 0)
+            if ((int)level.levelx <= 0)
                 return Color3f(0.0f,0.f,0.f) ;
-            else if ((int)level % 3 == 0)
+            else if ((int)level.levelx % 3 == 0)
                 return Color3f(0.0f,0.0f,1.0f) ;
-            else if ((int)level % 3 == 1)
+            else if ((int)level.levelx % 3 == 1)
                 return Color3f(0.0f,1.0f,0.0f) ;
-            else if ((int)level % 3 == 2)
+            else if ((int)level.levelx % 3 == 2)
                 return Color3f(1.0f,0.0f,0.0f) ;
             else {
                 return Color3f(1.0f,1.0f,1.0f) ;
