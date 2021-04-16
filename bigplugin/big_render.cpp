@@ -615,43 +615,48 @@ void BigRender::getPixelUniform(const float& u, const float& v, float &theta_i, 
         ipv[1] = 0;
 
     // compute texture mapping
-    int irow = 0;
-    int jcol = 0;
-    getCoordinates(u, v, level, irow, jcol);
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
-    float aux2[3];
-    for (int j = 0; j < 2; j++)
-        for (int l = 0; l < 2; l++)
-            for (int i = 0; i < 2; i++)
-                for (int k = 0; k < 2; k++)
-                {
-                    int idx = 0;
-                    int idxCam = np * ni * itv[j] + ni * ipv[l];
-                    if (iti[i] == 0)
-                        idx = idxCam;
-                    else
-                        idx = idxCam + 1 + np * (iti[i] - 1) + ipi[k]; 
-                   
-                    if (cache) {
-                        if (idx < nimg) { //uniform indexing sometimes go out of range
-                            const float* aux = cache->getPixel(idx, irow, jcol);
-                            for (int isp = 0; isp < planes; isp++)
-                            {
-                                RGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+    std::vector<Level> levels = getLevels(u, v, level);
+    for (auto l : levels) {
+        float aux2[3];
+        float tmpRGB[3] = { 0 };
+        int irow = l.row;
+        int jcol = l.col;
+        for (int j = 0; j < 2; j++)
+            for (int l = 0; l < 2; l++)
+                for (int i = 0; i < 2; i++)
+                    for (int k = 0; k < 2; k++)
+                    {
+                        int idx = 0;
+                        int idxCam = np * ni * itv[j] + ni * ipv[l];
+                        if (iti[i] == 0)
+                            idx = idxCam;
+                        else
+                            idx = idxCam + 1 + np * (iti[i] - 1) + ipi[k];
+
+                        if (cache) {
+                            if (idx < nimg) { //uniform indexing sometimes go out of range
+                                const float* aux = cache->getPixel(idx, irow, jcol);
+                                for (int isp = 0; isp < planes; isp++)
+                                {
+                                    tmpRGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                                }
+                            }
+                        }                     else {
+                            if (idx < nimg) {
+                                disk->getPixel(idx, irow, jcol, aux2);
+                                for (int isp = 0; isp < planes; isp++)
+                                {
+                                    tmpRGB[isp] += aux2[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
+                                }
                             }
                         }
                     }
-                    else {
-                        if (idx < nimg) {
-                            disk->getPixel(idx, irow, jcol, aux2);
-                            for (int isp = 0; isp < planes; isp++)
-                            {
-                                RGB[isp] += aux2[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
-                            }
-                        }
-                    }
-                }
+        //filtering weights aplication
+        for (int isp = 0; isp < 3; isp++)
+            RGB[isp] += l.weight * tmpRGB[isp];
+    }
 
     attenuateElevations(theta_i_BKP, RGB);
     XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
@@ -883,28 +888,35 @@ void BigRender::getPixelBTFthph(const float& u, const float& v, float& theta_i, 
     if (iph[1] >= nph)
         iph[1] -= nph;
 
-    int irow = 0;
-    int jcol = 0;
-    getCoordinates(u, v, level, irow, jcol);
+
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
-    float aux2[3];
-    for (int i = 0; i < 2; i++)
-        for (int k = 0; k < 2; k++)
-        {
-            int idx = ith[i] * nph + iph[k];
-            float w = wth[i] * wph[k];
-            if (cache) {
-                const float* aux = cache->getPixel(idx, irow, jcol);
-                for (int isp = 0; isp < planes; isp++)
-                    RGB[isp] += w * aux[isp];
-            } else {
-                disk->getPixel(idx, irow, jcol, aux2);
-                for (int isp = 0; isp < planes; isp++)
-                    RGB[isp] += w * aux2[isp];
+    std::vector<Level> levels = getLevels(u, v, level);
+    for (auto l : levels) {
+        float tmpRGB[3] = { 0 };
+        int irow = l.row;
+        int jcol = l.col;
+        float aux2[3];
+        for (int i = 0; i < 2; i++)
+            for (int k = 0; k < 2; k++)
+            {
+                int idx = ith[i] * nph + iph[k];
+                float w = wth[i] * wph[k];
+                if (cache) {
+                    const float* aux = cache->getPixel(idx, irow, jcol);
+                    for (int isp = 0; isp < planes; isp++)
+                       tmpRGB[isp] += w * aux[isp];
+                } else {
+                    disk->getPixel(idx, irow, jcol, aux2);
+                    for (int isp = 0; isp < planes; isp++)
+                        tmpRGB[isp] += w * aux2[isp];
+                }
+
             }
-            
-        }
+        //filtering weights aplication
+        for (int isp = 0; isp < 3; isp++)
+            RGB[isp] += l.weight * tmpRGB[isp];
+    }
 
     attenuateElevations(theta_i, RGB);
     XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
@@ -969,28 +981,35 @@ void BigRender::getPixelBTFthtd(const float& u, const float& v, float& theta_i, 
     wtd[0] /= sum;
     wtd[1] /= sum;
 
-    int irow = 0;
-    int jcol = 0;
-    getCoordinates(u, v, level, irow, jcol);
+   
 
     for (int isp = 0; isp < planes; isp++)
         RGB[isp] = 0.f;
-    float aux2[3];
-    for (int i = 0; i < 2; i++)
-        for (int j = 0; j < 2; j++)
-        {
-            int idx =  ith[i] * (90.f / step_p) + itd[j];
-            float w = wth[i] * wtd[j];
-            if (cache) {
-                const float* aux = cache->getPixel(idx, irow, jcol);
-                for (int isp = 0; isp < planes; isp++)
-                    RGB[isp] += w * aux[isp];
-            } else {
-                disk->getPixel(idx, irow, jcol, aux2);
-                for (int isp = 0; isp < planes; isp++)
-                    RGB[isp] += w * aux2[isp];
+    std::vector<Level> levels = getLevels(u, v, level);
+    for (auto l : levels) {
+        float aux2[3];
+        float tmpRGB[3] = { 0 };
+        int irow = l.row;
+        int jcol = l.col;
+        for (int i = 0; i < 2; i++)
+            for (int j = 0; j < 2; j++)
+            {
+                int idx = ith[i] * (90.f / step_p) + itd[j];
+                float w = wth[i] * wtd[j];
+                if (cache) {
+                    const float* aux = cache->getPixel(idx, irow, jcol);
+                    for (int isp = 0; isp < planes; isp++)
+                        tmpRGB[isp] += w * aux[isp];
+                } else {
+                    disk->getPixel(idx, irow, jcol, aux2);
+                    for (int isp = 0; isp < planes; isp++)
+                        tmpRGB[isp] += w * aux2[isp];
+                }
             }
-        }
+        //filtering weights aplication
+        for (int isp = 0; isp < 3; isp++)
+            RGB[isp] += l.weight * tmpRGB[isp];
+    }
 
     attenuateElevations(theta_i, RGB);
     XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
