@@ -103,6 +103,8 @@ private:
     std::vector<Level> getMipAnizoLevels(const float& u, const float& v, MipLvl& level);
     //return levels for ANIZO_4x
     std::vector<Level> getMipAnizo4Levels(const float& u, const float& v, MipLvl& level);
+    //normalize weight of levels (cnt weights == 1)
+    void normalizeLevelsWeight(std::vector<Level>& levels);
    
     
 
@@ -441,41 +443,55 @@ std::vector<BigRender::Level> BigRender::getMipAnizoLevels(const float& u, const
     return levels;
 }
 
+void BigRender::normalizeLevelsWeight(std::vector<Level>& levels) {
+    float cnt = 0.0f;
+    for (auto l : levels)
+        cnt += l.weight;
+    if (cnt != 1.0f) {
+        float norm = 1.0f / cnt;
+        for (auto& l : levels)
+            l.weight *= norm;
+    }
+   
+}
+
 std::vector<BigRender::Level> BigRender::getMipAnizo4Levels(const float& u, const float& v, MipLvl & level) {
     std::vector<Level> levels;
     float wholex = floor(level.levelx);
     float decimalx = level.levelx - wholex;
     float wholey = floor(level.levely);
     float decimaly = level.levely - wholey;
+    float decimalxInv = 1 - decimalx;
+    float decimalyInv = 1 - decimaly;
     if (wholex >= mip.anisotropic.width() - 1) { //only two interpolations
         Level l1 = getCoordinatesAnizo(u, v, wholex, wholey);
         l1.weight = (1 + decimaly) * 0.5;
         levels.push_back(l1);
         l1 = getCoordinatesAnizo(u, v, wholex, wholey + 1);
-        l1.weight = (1 + (1 - decimaly)) * 0.5;
+        l1.weight = (1 + decimalyInv) * 0.5;
         levels.push_back(l1);
     } else if (wholey >= mip.anisotropic.height() - 1) { //only two interpolations
         Level l1 = getCoordinatesAnizo(u, v, wholex, wholey);
         l1.weight = (decimalx + decimaly) * 0.5;
         levels.push_back(l1);
         l1 = getCoordinatesAnizo(u, v, wholex + 1, wholey);
-        l1.weight = ((1 - decimalx) + 1) * 0.5;
+        l1.weight = (decimalyInv + 1) * 0.5;
         levels.push_back(l1);
     } else {
         Level l1 = getCoordinatesAnizo(u, v, wholex, wholey);
-        l1.weight = (decimalx + decimaly) * 0.25;
+        l1.weight = sqrt(decimalx * decimalx + decimaly * decimaly);
         levels.push_back(l1);
         l1 = getCoordinatesAnizo(u, v, wholex + 1, wholey);
-        l1.weight = ((1 - decimalx) + decimaly) * 0.25;
+        l1.weight =sqrt(decimalxInv * decimalxInv + decimaly*decimaly);
         levels.push_back(l1);
         l1 = getCoordinatesAnizo(u, v, wholex + 1, wholey + 1);
-        l1.weight = ((1 - decimalx) + (1 - decimaly)) * 0.25;
+        l1.weight = sqrt(decimalxInv * decimalxInv + decimalyInv*decimalyInv);
         levels.push_back(l1);
         l1 = getCoordinatesAnizo(u, v, wholex, wholey + 1);
-        l1.weight = (decimalx + (1 - decimaly)) * 0.25;
+        l1.weight = sqrt(decimalx * decimalx + decimalyInv * decimalyInv);
         levels.push_back(l1);
     }
-   
+    normalizeLevelsWeight(levels);
     return levels;
 }
 
