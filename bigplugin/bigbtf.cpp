@@ -26,14 +26,9 @@ public:
         m_flags = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide;
         std::string filename = props.string("big_filepath");
         Log(Info, "Loading file \"%s\" ..", filename);
-        uint64_t memory = 0;
-        bool useMemory = false;
+        bool memory = false;
         if (props.has_property("memory")) {
-            memory = props.int_("memory");
-            memory = memory * 1024 * 1024; //convert from MB to B 
-            if (memory >= 0) {
-                useMemory = true;
-            }
+            memory = props.bool_("memory");
         }
 
         if (props.has_property("cubemap_path")) {
@@ -42,14 +37,14 @@ public:
                 pathToCubeMap += "/";
             }
             try {
-                big_render = new BigRender(filename, useMemory, memory, pathToCubeMap);
+                big_render = new BigRender(filename, memory, pathToCubeMap);
             }
             catch (const char* str) {
                 Log(Error, "BigRender init error: %s", str);
             }
         } else {
             try {
-                big_render = new BigRender(filename, useMemory, memory);
+                big_render = new BigRender(filename, memory);
             }
             catch (const char* str) {
                 Log(Error, "BigRender init error: %s", str);
@@ -76,6 +71,9 @@ public:
         if (props.has_property("scale")) {
             float scale = props.float_("scale");
             big_render->setScale(scale);
+        }
+        if (props.has_property("level")) {
+           filter_level = props.int_("level");
         }
 
         m_components.push_back(m_flags);
@@ -118,14 +116,14 @@ public:
                 rows = big_render->mip.anisotropic[0].rows;
             }
             float width = max(max(si.duv_dx[0] * cols, si.duv_dx[1] * cols), max(si.duv_dy[0] * rows, si.duv_dy[1] * rows));
-            level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
+            level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width) + filter_level);
         } else if (big_render->filter == Filtering::ANIZO_1x || big_render->filter == Filtering::ANIZO_4x) {
             int cols = big_render->mip.anisotropic[0].cols;
             int rows = big_render->mip.anisotropic[0].rows;
             float widthx = max(si.duv_dx[0] * cols, si.duv_dx[1] * cols);
             float widthy = max(si.duv_dy[0] * rows, si.duv_dy[1] * rows);
-            level.levelx = min(float(big_render->mip.anisotropic.width()-1), float(big_render->mip.anisotropic.width() - 1) + log2(widthx));
-            level.levely = min(float(big_render->mip.anisotropic.height() - 1), float(big_render->mip.anisotropic.height() - 1) + log2(widthy));
+            level.levelx = min(float(big_render->mip.anisotropic.width()-1), float(big_render->mip.anisotropic.width() - 1) + log2(widthx) + filter_level);
+            level.levely = min(float(big_render->mip.anisotropic.height() - 1), float(big_render->mip.anisotropic.height() - 1) + log2(widthy) + filter_level);
         }
         //(Info, "width \"%d\" ", width);
         //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
@@ -184,8 +182,15 @@ public:
                     rows = big_render->mip.anisotropic[0].rows;
                 }
                 float width = max(max(si.duv_dx[0] * cols, si.duv_dx[1] * cols), max(si.duv_dy[0] * rows , si.duv_dy[1] * rows));
-                level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width));
+                level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width) + filter_level);
                 //std::cout << level << " log width"<< log2(width) << std::endl;
+            } else if (big_render->filter == Filtering::ANIZO_1x || big_render->filter == Filtering::ANIZO_4x) {
+                int cols = big_render->mip.anisotropic[0].cols;
+                int rows = big_render->mip.anisotropic[0].rows;
+                float widthx = max(si.duv_dx[0] * cols, si.duv_dx[1] * cols);
+                float widthy = max(si.duv_dy[0] * rows, si.duv_dy[1] * rows);
+                level.levelx = min(float(big_render->mip.anisotropic.width() - 1), float(big_render->mip.anisotropic.width() - 1) + log2(widthx)+ filter_level);
+                level.levely = min(float(big_render->mip.anisotropic.height() - 1), float(big_render->mip.anisotropic.height() - 1) + log2(widthy) + filter_level);
             }
 #if MIPMAPMAP == 1
             if ((int)level.levelx <= 0)
@@ -276,6 +281,7 @@ public:
 protected:
     ref<Base> m_nested_bsdf[2];
     BigRender *big_render;
+    int filter_level = 0;
 };
 
 MTS_IMPLEMENT_CLASS_VARIANT(BigBTF, BSDF)

@@ -68,7 +68,7 @@ private:
     //xml document
     pugi::xml_document doc;
     //load big file, and set default parameters
-    void init(std::string &bigname, bool cache, uint64_t cache_size);
+    void init(std::string &bigname, bool & cache);
     //generate angles from cubemaps
     void generateDirectionsUBO(float** anglesUBO);
     //UTIA have some invalid data (negative), we can't have negative value in this data, so we clamp negative values to zero
@@ -110,9 +110,9 @@ private:
 
 public:
     //constructor for uniform data
-    BigRender(std::string, bool cache = false, uint64_t cache_size = 0);
+    BigRender(std::string, bool cache = false);
     //constructor for cubemaps
-    BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps);
+    BigRender(std::string bigname, bool& cache, std::string &path_to_cube_maps);
     ~BigRender();
     //get pixel from BIG file
     void getPixel(const float &u, const float &v, float &theta_i, float &phi_i, float &theta_v, float &phi_v, MipLvl &level, float RGB[]);
@@ -167,7 +167,7 @@ void  BigRender::freemem2(float** m, int nrl, int nrh, int ncl, int nch) {
     free((float**)(m + nrl));
 }
 
-void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
+void BigRender::init(std::string &bigname, bool &cache) {
     try {
         /* read info from BIG file */
         mif.open(bigname, true);
@@ -209,10 +209,10 @@ void BigRender::init(std::string &bigname, bool cache, uint64_t cache_size) {
 }
 
 
-BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::string path_to_cube_maps) {
-    init(bigname, cache, cache_size);
+BigRender::BigRender(std::string bigname, bool & cache, std::string &path_to_cube_maps) {
     if (dist != Distribution::UBO)
         throw "MIF file is'n UBO file and path to cubemaps added, delete cubamap_path from bsdf definition";
+    init(bigname, cache);
     this->ni = 81;
     this->nv = 81;
     // generating list of angles 
@@ -224,8 +224,8 @@ BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size, std::
 }
 
 
-BigRender::BigRender(std::string bigname, bool cache, uint64_t cache_size) {
-    init(bigname,cache, cache_size);
+BigRender::BigRender(std::string bigname, bool cache) {
+    init(bigname,cache);
     switch (dist)
     {
     case Distribution::uniform:
