@@ -3,13 +3,11 @@
 #include "big_core_read.hpp"
 //include cubemaps indexing class provide by Jiri Filip
 #include "TCubeMap.cpp"
-#include "pugixml.cpp"
 #include "MIFbtf.hpp"
+#include "pugixml.hpp"
 using namespace mif;
-using namespace mif::directions;
-using namespace mif::mipmap;
 enum class Distribution { uniform, UBO, BTFthtd, BTFthph, none };
-static std::unordered_map<std::string, Distribution > const table = { {"uniform",Distribution::uniform}, {"UBO81x81",Distribution::UBO}, {"CoatingRegular", Distribution::BTFthtd}, {"CoatingSpecial", Distribution::BTFthph} };
+static std::unordered_map<std::string, Distribution > const table = { {"Uniform",Distribution::uniform}, {"UBO81x81",Distribution::UBO}, {"CoatingRegular", Distribution::BTFthtd}, {"CoatingSpecial", Distribution::BTFthph} };
 Distribution parse(std::string str) {
     auto it = table.find(str);
     if (it != table.end())
@@ -62,11 +60,9 @@ private:
     TCubeMap* CM = NULL;      // cubemaps
     //big::BigCoreRead * bigR; //BIG read structure
     MIFbtf mif;
-    MIFbtf::MIFcacheWhole * cache = NULL;
-    MIFbtf::MIFcacheNone * disk = NULL;
+    MIFbtf::CacheWholeSame * cache = NULL;
+    MIFbtf::CacheNoneSame * disk = NULL;
     Distribution dist;
-    //xml document
-    pugi::xml_document doc;
     //load big file, and set default parameters
     void init(std::string &bigname, bool & cache);
     //generate angles from cubemaps
@@ -85,8 +81,6 @@ private:
     void normalize(float* v);
     void cross_product(float* v1, float* v2, float* out);
     void rotate_vector(float* vector, float* axis, float angle, float* out);
-    //transform UV coordinates to image coordinates and apply mipmap level
-    void getCoordinates(const float &u, const float &v, MipLvl& level, int& row, int& col);
     //get coordinates for Mipmap
     Level getCoordinatesMip(const float& u, const float& v, const int level);
     //get coordinates for anizotropic filtering
@@ -133,7 +127,7 @@ public:
     //set type of filter
     void setFilter(std::string &filter);
     //information about mipmaps
-    Mipmap mip;
+    ElementMipmap mip;
     // max level of mipmap
     int maxMipLevel;
     //Filter type
@@ -167,7 +161,7 @@ void  BigRender::freemem2(float** m, int nrl, int nrh, int ncl, int nch) {
     free((float**)(m + nrl));
 }
 
-void BigRender::init(std::string &bigname, bool &cache) {
+void BigRender::init(std::string& bigname, bool& cache) {
     try {
         /* read info from BIG file */
         mif.open(bigname, true);
@@ -176,43 +170,44 @@ void BigRender::init(std::string &bigname, bool &cache) {
     catch (const char* msg) {
         std::cout << msg << std::endl;
     }
+    auto btf = mif.getBtf(mif.getBtfIDs().front()); //mif.getBtf("btf0")
     if (cache) {
-        this->cache = new MIFbtf::MIFcacheWhole(mif,"btf0");
+        this->cache = new MIFbtf::CacheWholeSame(mif, "btf0");
     } else {
-        this->disk = new MIFbtf::MIFcacheNone(mif, "btf0");
+        this->disk = new MIFbtf::CacheNoneSame(mif, "btf0");
     }
     this->r2d = 180.f / M_PI;
+
     if (cache) {
         this->nr = this->cache->getImageHeight();
         this->nc = this->cache->getImageWidth();
         this->nimg = this->cache->getNumberOfImages();
         this->planes = this->cache->getImageNumberOfPlanes(); // number of specters
     } else {
-        this->nr = this->disk->getImageHeight(0);
-        this->nc = this->disk->getImageWidth(0);
+        this->nr = this->disk->getImageHeight();
+        this->nc = this->disk->getImageWidth();
         this->nimg = this->disk->getNumberOfImages();
-        this->planes = this->disk->getImageNumberOfPlanes(0);
+        this->planes = this->disk->getImageNumberOfPlanes();
     }
-    mip =  mif.getBtfMipmap("btf0");
-   
-    if (mip.isotropic.size() > 0) {
-        this->nc = mip.isotropic[0].cols;
-        maxMipLevel = mip.isotropic.size() - 1;
+
+    mip = btf.getMipmap();
+    if (mip.getIsotropicItems().size() > 0 && mip.isIsotropic() ) {
+        this->nc = mip.getItem(0).getCols();
+        maxMipLevel = mip.getIsotropicItems().size() - 1;
+    } else if(mip.getAnisotropicItems().size() >0) {
+        this->nc = mip.getItem(0,0).getCols();
+        this->nr = mip.getItem(0,0).getRows();
+        maxMipLevel = max(mip.getAnisotropicItems().height()-1, mip.getAnisotropicItems().width()-1);
     }
-    if (mip.anisotropic.size() > 0) {
-        this->nc = mip.anisotropic[0].cols;
-        this->nr = mip.anisotropic[0].rows;
-        maxMipLevel = max(mip.anisotropic.height()-1, mip.anisotropic.width()-1);
-    }
-    Directions directions = mif.getBtfDirections("btf0");
-    this->dist = parse(directions.name);
+    auto directionsInfo = btf.getDirectionsInfo();
+    this->dist = parse(directionsInfo.getName());
 }
 
 
 BigRender::BigRender(std::string bigname, bool & cache, std::string &path_to_cube_maps) {
-    if (dist != Distribution::UBO)
-        throw "MIF file is'n UBO file and path to cubemaps added, delete cubamap_path from bsdf definition";
     init(bigname, cache);
+    if (dist != Distribution::UBO)
+        throw "MIF file isn't UBO file and path to cubemaps added, delete cubamap_path from bsdf definition";
     this->ni = 81;
     this->nv = 81;
     // generating list of angles 
@@ -354,19 +349,7 @@ void BigRender::attenuateElevations(float theta_i, float RGB[])
     }
 }
 
-void BigRender::getCoordinates(const float &u, const float &v, MipLvl& level, int& row, int &col) {
-    if (level.levelx <= 0) {
-        //abs u and v because mitsuba scene matpreview.xml have negative UV coordinates.
-        row = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
-        col = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
-    } else {
-        Item lvl = mip.isotropic[(int)level.levelx];
-        int tmprow = (int)(floor(abs(u) * (float)lvl.rows * uv_scale)) % lvl.rows;
-        int tmpcol = (int)(floor(abs(v) * (float)lvl.cols * uv_scale)) % lvl.cols;
-        row = tmprow + lvl.y;
-        col = tmpcol + lvl.x;
-    }
-}
+
 
 BigRender::Level BigRender::getCoordinatesMip(const float& u, const float& v, const int level) {
     BigRender::Level l;
@@ -375,16 +358,16 @@ BigRender::Level BigRender::getCoordinatesMip(const float& u, const float& v, co
         l.row = (int)(floor(abs(u) * (float)nr * uv_scale)) % nr;
         l.col = (int)(floor(abs(v) * (float)nc * uv_scale)) % nc;
     } else {
-        Item lvl;
-        if (mip.isotropic.size() > 0) {
-            lvl = mip.isotropic[level];
+        ElementMipmapItem lvl;
+        if (mip.isIsotropic()) {
+            lvl = mip.getIsotropicItems()[level];
         } else {
-            lvl = mip.anisotropic[level + mip.anisotropic.width() * level];
+            lvl = mip.getAnisotropicItems()(level,level);
         }
-        int tmprow = (int)(floor(abs(u) * (float)lvl.rows * uv_scale)) % lvl.rows;
-        int tmpcol = (int)(floor(abs(v) * (float)lvl.cols * uv_scale)) % lvl.cols;
-        l.row = tmprow + lvl.y;
-        l.col = tmpcol + lvl.x;
+        int tmprow = (int)(floor(abs(u) * (float)lvl.getRows() * uv_scale)) % lvl.getRows();
+        int tmpcol = (int)(floor(abs(v) * (float) lvl.getCols() * uv_scale)) % lvl.getCols();
+        l.row = tmprow + lvl.getY();
+        l.col = tmpcol + lvl.getX();
     }
     return l;
 }
@@ -395,12 +378,12 @@ BigRender::Level BigRender::getCoordinatesAnizo(const float& u, const float& v, 
         levelx = 0;
     if (levely <= 0)
         levely = 0;
-    Item lvl;
-    lvl = mip.anisotropic[levely + mip.anisotropic.width() * levelx];
-    int tmprow = (int)(floor(abs(u) * (float)lvl.rows * uv_scale)) % lvl.rows;
-    int tmpcol = (int)(floor(abs(v) * (float)lvl.cols * uv_scale)) % lvl.cols;
-    l.row = tmprow + lvl.y;
-    l.col = tmpcol + lvl.x;
+    ElementMipmapItem lvl;
+    lvl = mip.getAnisotropicItems()(levely, levelx);
+    int tmprow = (int)(floor(abs(u) * (float)lvl.getRows() * uv_scale)) % lvl.getRows();
+    int tmpcol = (int)(floor(abs(v) * (float)lvl.getCols() * uv_scale)) % lvl.getCols();
+    l.row = tmprow + lvl.getY();
+    l.col = tmpcol + lvl.getX();
     return l;
 }
 
@@ -463,14 +446,14 @@ std::vector<BigRender::Level> BigRender::getMipAnizo4Levels(const float& u, cons
     float decimaly = level.levely - wholey;
     float decimalxInv = 1 - decimalx;
     float decimalyInv = 1 - decimaly;
-    if (wholex >= mip.anisotropic.width() - 1) { //only two interpolations
+    if (wholex >= mip.getAnisotropicItems().width() - 1) { //only two interpolations
         Level l1 = getCoordinatesAnizo(u, v, wholex, wholey);
         l1.weight = (1 + decimaly) * 0.5;
         levels.push_back(l1);
         l1 = getCoordinatesAnizo(u, v, wholex, wholey + 1);
         l1.weight = (1 + decimalyInv) * 0.5;
         levels.push_back(l1);
-    } else if (wholey >= mip.anisotropic.height() - 1) { //only two interpolations
+    } else if (wholey >= mip.getAnisotropicItems().height() - 1) { //only two interpolations
         Level l1 = getCoordinatesAnizo(u, v, wholex, wholey);
         l1.weight = (decimalx + decimaly) * 0.5;
         levels.push_back(l1);
@@ -512,7 +495,7 @@ std::vector<BigRender::Level> BigRender::getLevels(const float& u, const float& 
         return getMipAnizoLevels(u, v, level);
         break;
     case Filtering::ANIZO_4x:
-        if(level.levely < mip.anisotropic.height()-1 || level.levelx < mip.anisotropic.width()-1)
+        if(level.levely < mip.getAnisotropicItems().height()-1 || level.levelx < mip.getAnisotropicItems().width()-1)
             return getMipAnizo4Levels(u, v, level);
         else
             return getMipAnizoLevels(u, v, level);
@@ -653,13 +636,13 @@ void BigRender::getPixelUniform(const float& u, const float& v, float &theta_i, 
 
                         if (cache) {
                             if (idx < nimg) { //uniform indexing sometimes go out of range
-                                const float* aux = cache->getPixel(idx, irow, jcol);
+                                const float * aux = cache->getPixel(idx, irow, jcol);
                                 for (int isp = 0; isp < planes; isp++)
                                 {
                                     tmpRGB[isp] += aux[isp] * wti[i] * wtv[j] * wpi[k] * wpv[l];;
                                 }
                             }
-                        }                     else {
+                        } else {
                             if (idx < nimg) {
                                 disk->getPixel(idx, irow, jcol, aux2);
                                 for (int isp = 0; isp < planes; isp++)
@@ -708,9 +691,6 @@ void BigRender::getPixelCubeMaps(const float& u, const float& v, float &theta_i,
             texWeights[k] = i_weight[i] * v_weight[j];
         }
 
-    // compute texture mapping
-    
-    //getCoordinates(u, v, level, irow, jcol);
     for (int isp = 0; isp < 3; isp++)
         RGB[isp] = 0.f;
     std::vector<Level> levels = getLevels(u, v, level);
