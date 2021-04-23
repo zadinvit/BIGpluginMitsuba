@@ -9,7 +9,7 @@
 #include "big_render.cpp"
 #include <ostream>
 
-//1 to generate mipmap levels image
+//1 to generate mipmap levels image instead render texture
 #define MIPMAPMAP 0;
 
 NAMESPACE_BEGIN(mitsuba)
