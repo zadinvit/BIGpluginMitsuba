@@ -130,7 +130,7 @@ public:
     void getPixelBTFthtd(const float& u, const float& v, float& theta_i, float& phi_i, float& theta_v, float& phi_v, MipLvl& level, float RGB[]);
     //Convert XYZ to sRGB 0-1 format
     void XYZtoRGB(float XYZ[]);
-    // soft transfer on shadow boundaries, not use in final implementation in Mitsuba, but could help in normal renderer
+    // soft transfer on shadow boundaries, theta in radians, not use in final implementation in Mitsuba, but could help in normal renderer
     void attenuateElevations(float theta_i, float RGB[]);
     //set tiling scale of UV coordinates
     void setScale(float scale);

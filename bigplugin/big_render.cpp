@@ -29,14 +29,10 @@ void  BigRender::freemem2(float** m, int nrl, int nrh, int ncl, int nch) {
 }
 
 void BigRender::init(std::string& bigname, bool& cache) {
-    try {
-        /* read info from BIG file */
-        mif.open(bigname, true);
-        //bigR = new big::BigCoreRead(bigname, cache, cache_size);
-    }
-    catch (const char* msg) {
-        std::cout << msg << std::endl;
-    }
+    /* read info from BIG file */
+    if (!mif.open(bigname, true)) 
+        throw "Bad path to file mif file. Fail to open mif file.";
+
     auto btf = mif.getBtf(mif.getBtfIDs().front()); //mif.getBtf("btf0")
     if (cache) {
         this->cache = new MIFbtf::CacheWholeSame(mif, "btf0");
@@ -64,7 +60,7 @@ void BigRender::init(std::string& bigname, bool& cache) {
     } else if(mip.getAnisotropicItems().size() >0) {
         this->nc = mip.getItem(0,0).getCols();
         this->nr = mip.getItem(0,0).getRows();
-        maxMipLevel = max(mip.getAnisotropicItems().height()-1, mip.getAnisotropicItems().width()-1);
+        maxMipLevel = std::min(mip.getAnisotropicItems().height()-1, mip.getAnisotropicItems().width()-1);
     }
     auto directionsInfo = btf.getDirectionsInfo();
     this->dist = parse(directionsInfo.getName());
@@ -249,10 +245,10 @@ BigRender::Level BigRender::getCoordinatesAnizo(const float& u, const float& v, 
         levely = 0;
     ElementMipmapItem lvl;
     lvl = mip.getAnisotropicItems()(levely, levelx);
-    int tmprow = (int)(floor(abs(u) * (float)lvl.getRows() * uv_scale)) % lvl.getRows();
-    int tmpcol = (int)(floor(abs(v) * (float)lvl.getCols() * uv_scale)) % lvl.getCols();
-    l.row = tmprow + lvl.getY();
-    l.col = tmpcol + lvl.getX();
+    l.row = (int)(floor(abs(u) * (float)lvl.getRows() * uv_scale)) % lvl.getRows();
+    l.col = (int)(floor(abs(v) * (float)lvl.getCols() * uv_scale)) % lvl.getCols();
+    l.row += lvl.getY();
+    l.col += lvl.getX();
     return l;
 }
 
@@ -396,6 +392,10 @@ void BigRender::getPixel(const float &u, const float &v, float &theta_i, float &
     default:
         break;
     }
+    //attenuateElevations(theta_i_BKP, RGB);
+    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
+    //clamp RGB values, measure data could be negative, need clamp this data to zero
+    clampToZero(RGB, 3);
 
 }
 
@@ -525,13 +525,6 @@ void BigRender::getPixelUniform(const float& u, const float& v, float &theta_i, 
         for (int isp = 0; isp < 3; isp++)
             RGB[isp] += l.weight * tmpRGB[isp];
     }
-
-    //attenuateElevations(theta_i_BKP, RGB);
-    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
-    //clamp RGB values, measure data could be negative, need clamp this data to zero
-    clampToZero(RGB, 3);
-
-    return;
 }
 
 void BigRender::getPixelCubeMaps(const float& u, const float& v, float &theta_i, float &phi_i,
@@ -583,15 +576,14 @@ void BigRender::getPixelCubeMaps(const float& u, const float& v, float &theta_i,
 
         }
         //filtering weights aplication
-        for (int isp = 0; isp < 3; isp++)
+        for (int isp = 0; isp < 3; isp++) {
             RGB[isp] += l.weight * tmpRGB[isp];
-    }
-    // soft transfer on shadow boundaries
-    //attenuateElevations(theta_i_BKP, RGB);
+            if (std::isnan(RGB[isp]))
+                bool test = test;
+        
+        }
 
-    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
-    //clamp RGB values, measure data could be negative, need clamp this data to zero
-    clampToZero(RGB, 3);
+    }
 }
 
 //*****BTFthph********
@@ -783,10 +775,6 @@ void BigRender::getPixelBTFthph(const float& u, const float& v, float& theta_i, 
             RGB[isp] += l.weight * tmpRGB[isp];
     }
 
-    //attenuateElevations(theta_i, RGB);
-    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
-    //clamp RGB values, measure data could be negative, need clamp this data to zero
-    clampToZero(RGB, 3);
 }
 
 void BigRender::getPixelBTFthtd(const float& u, const float& v, float& theta_i, float& phi_i,
@@ -875,10 +863,5 @@ void BigRender::getPixelBTFthtd(const float& u, const float& v, float& theta_i, 
         for (int isp = 0; isp < 3; isp++)
             RGB[isp] += l.weight * tmpRGB[isp];
     }
-
-    //attenuateElevations(theta_i, RGB);
-    XYZtoRGB(RGB); //covert XYZ data in RGB to sRGB data
-    //clamp RGB values, measure data could be negative, need clamp this data to zero
-    clampToZero(RGB, 3);
 
 }

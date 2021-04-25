@@ -24,7 +24,7 @@ public:
     BigBTF(const Properties &props) : Base(props) {
         int bsdf_index = 0;
         m_flags = BSDFFlags::DiffuseReflection | BSDFFlags::FrontSide;
-        std::string filename = props.string("big_filepath");
+        std::string filename = props.string("filepath");
         Log(Info, "Loading file \"%s\" ..", filename);
         bool memory = false;
         if (props.has_property("memory")) {
@@ -116,15 +116,24 @@ public:
                 rows = big_render->mip.getAnisotropicItems()[0].getRows();
             }
             float width = max(max(si.duv_dx[0] * cols, si.duv_dx[1] * cols), max(si.duv_dy[0] * rows, si.duv_dy[1] * rows));
-            level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width) + filter_level);
+            if (width == 0.0f) //log 0 is inf, so we need check it 
+                level.levelx = 0.0f;
+            else
+                level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width) + filter_level);
             //std::cout << level << " log width"<< log2(width) << std::endl;
         } else if (big_render->filter == Filtering::ANIZO_1x || big_render->filter == Filtering::ANIZO_4x) {
             int cols = big_render->mip.getAnisotropicItems()[0].getCols();
             int rows = big_render->mip.getAnisotropicItems()[0].getRows();
             float widthx = max(si.duv_dx[0] * cols, si.duv_dx[1] * cols);
             float widthy = max(si.duv_dy[0] * rows, si.duv_dy[1] * rows);
-            level.levelx = min(float(big_render->mip.getAnisotropicItems().width() - 1), float(big_render->mip.getAnisotropicItems().width() - 1) + log2(widthx) + filter_level);
-            level.levely = min(float(big_render->mip.getAnisotropicItems().height() - 1), float(big_render->mip.getAnisotropicItems().height() - 1) + log2(widthy) + filter_level);
+            if (widthx == 0.0f) //log 0 is inf, so we need check it 
+                level.levelx = 0.0f;
+            else 
+                level.levelx = min(float(big_render->mip.getAnisotropicItems().width() - 1), float(big_render->mip.getAnisotropicItems().width() - 1) + log2(widthx) + filter_level);
+            if(widthy == 0.0f)
+                level.levely = 0.0f;
+            else
+                level.levely = min(float(big_render->mip.getAnisotropicItems().height() - 1), float(big_render->mip.getAnisotropicItems().height() - 1) + log2(widthy) + filter_level);
         }
         //(Info, "width \"%d\" ", width);
         //Log(Info, "duv_DX \"%d\", \"%d\" duv_DY \"%d\", \"%d\" ", duv_dx[0], duv_dx[1], duv_dy[0], duv_dy[1]);
@@ -182,16 +191,25 @@ public:
                     cols = big_render->mip.getAnisotropicItems()[0].getCols();
                     rows = big_render->mip.getAnisotropicItems()[0].getRows();
                 }
-                float width = max(max(si.duv_dx[0] * cols, si.duv_dx[1] * cols), max(si.duv_dy[0] * rows , si.duv_dy[1] * rows));
-                level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width) + filter_level);
+                float width = max(max(si.duv_dx[0] * cols, si.duv_dx[1] * cols), max(si.duv_dy[0] * rows, si.duv_dy[1] * rows));
+                if (width == 0.0f) //log 0 is inf, so we need check it 
+                    level.levelx = 0.0f;
+                else
+                    level.levelx = min(float(big_render->maxMipLevel), float(big_render->maxMipLevel) + log2(width) + filter_level);
                 //std::cout << level << " log width"<< log2(width) << std::endl;
             } else if (big_render->filter == Filtering::ANIZO_1x || big_render->filter == Filtering::ANIZO_4x) {
                 int cols = big_render->mip.getAnisotropicItems()[0].getCols();
                 int rows = big_render->mip.getAnisotropicItems()[0].getRows();
                 float widthx = max(si.duv_dx[0] * cols, si.duv_dx[1] * cols);
                 float widthy = max(si.duv_dy[0] * rows, si.duv_dy[1] * rows);
-                level.levelx = min(float(big_render->mip.getAnisotropicItems().width() - 1), float(big_render->mip.getAnisotropicItems().width() - 1) + log2(widthx)+ filter_level);
-                level.levely = min(float(big_render->mip.getAnisotropicItems().height() - 1), float(big_render->mip.getAnisotropicItems().height() - 1) + log2(widthy) + filter_level);
+                if (widthx == 0.0f) //log 0 is inf, so we need check it 
+                    level.levelx = 0.0f;
+                else
+                    level.levelx = min(float(big_render->mip.getAnisotropicItems().width() - 1), float(big_render->mip.getAnisotropicItems().width() - 1) + log2(widthx) + filter_level);
+                if (widthy == 0.0f)
+                    level.levely = 0.0f;
+                else
+                    level.levely = min(float(big_render->mip.getAnisotropicItems().height() - 1), float(big_render->mip.getAnisotropicItems().height() - 1) + log2(widthy) + filter_level);
             }
 #if MIPMAPMAP == 1
             if ((int)level.levelx <= 0)
