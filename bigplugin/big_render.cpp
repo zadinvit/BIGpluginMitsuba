@@ -229,10 +229,10 @@ BigRender::Level BigRender::getCoordinatesMip(const float& u, const float& v, co
         } else {
             lvl = mip.getAnisotropicItems()(level,level);
         }
-        int tmprow = (int)(floor(abs(u) * (float)lvl.getRows() * uv_scale)) % lvl.getRows();
-        int tmpcol = (int)(floor(abs(v) * (float) lvl.getCols() * uv_scale)) % lvl.getCols();
-        l.row = tmprow + lvl.getY();
-        l.col = tmpcol + lvl.getX();
+        l.row = (int)(floor(abs(u) * (float)lvl.getRows() * uv_scale)) % lvl.getRows();
+        l.col = (int)(floor(abs(v) * (float) lvl.getCols() * uv_scale)) % lvl.getCols();
+        l.row += lvl.getY();
+        l.col += lvl.getX();
     }
     return l;
 }
