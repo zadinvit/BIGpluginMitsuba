@@ -1,5 +1,5 @@
 **bigbtf mitsuba plugin**
-This plugin is part of my diploma thesis "Visualization of advanced material appearence representations."
+This plugin is part of my diploma thesis "Visualization of advanced material appearence representations." plugin allows rendering of BTF textures in MIF format [https://github.com/RadomirVavra/MIFlib](https://github.com/RadomirVavra/MIFlib) (The Institute of Information Theory and Automation (UTIA)).
 **Instalation**
 
  1. add code to mitsuba/ext/CMakeLists.txt 
@@ -39,5 +39,8 @@ You can use parameter **level** to change the default level of filtering, so if 
  -  ANIZO_4x anisotropy filtering with interpolation between levelx and levely (not recommended - slow + same results as ANIZO_1x)
  - none
 
-Documentation created by Vít Zadina 
+**For developers**
+You can use **big_render.cpp/.hpp** for support rendering BTF texture in mif format inf other renders. You only need implement same logic, which i implement in bigbtf.cpp. 
 
+
+Documentation created by Vít Zadina 
