@@ -266,32 +266,6 @@ public:
         
             return warp::square_to_cosine_hemisphere_pdf(wo);
     }
-    //not working... 
-    //float chooseLevel(const Vector2f& d0, const Vector2f& d1, Vector2i size) const {
-    //    float e = 1e-4f;
-
-    //   float du0 = d0[0] * size[0], dv0 = d0[1] * size[1],
-    //    du1 = d1[0] * size[0], dv1 = d1[1] * size[1];
-
-    //        /* Turn the texture-space Jacobian into the coefficients of an
-    //           implicitly defined ellipse. */
-    //   float A = dv0 * dv0 + dv1 * dv1,
-    //              B = -2.0f * (du0 * dv0 + du1 * dv1),
-    //              C = du0 * du0 + du1 * du1,
-    //              F = A * C - B * B * 0.25f;
-
-    //    /* Compute the major and minor radii */
-    //    float root = hypot(A - C, B),
-    //    Aprime = 0.5f * (A + C - root),
-    //    Cprime = 0.5f * (A + C + root),
-    //    majorRadius = Aprime != 0 ? std::sqrt(F / Aprime) : 0,
-    //    minorRadius = Cprime != 0 ? std::sqrt(F / Cprime) : 0;
-    //    float level = 0;
-    //    if (!(minorRadius > 0) || !(majorRadius > 0) || F < 0)        
-    //     level = log2(std::max(majorRadius, e));
-    //    return level;         
-    //}
-
 
     void traverse(TraversalCallback *callback) override {
         callback->put_object("bsdf_0", m_nested_bsdf[0].get());
