@@ -1,0 +1,71 @@
+<scene version="2.1.0">
+
+  <!-- Defaults, these can be set via the command line: -Darg=value -->
+  <path value="../../mitsubaTestFiles"/>
+
+
+  <bsdf type="bigbtf" id="uniform">
+    <string name="filepath" value="f:\vita_skola\mitsubatestfiles\mifFiles\fabric106_uniform.mif"/>
+    <boolean name="memory" value="true"/>
+    <float name="scale" value ="400.0"/>
+    <string name="filtering" value="ANIZO_4x"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="grass">
+    <string name="filepath" value="F:\vita_skola\mitsubaTestFiles\mifFiles\MAM2014_007.mif"/>
+    <boolean name="memory" value="true"/>
+    <string name="cubemap_path" value="F:\vita_skola\mitsuba\build\dist\cubemaps\081\0256"/>
+    <float name="scale" value ="400.0"/>
+    <string name="filtering" value="ANIZO_4x"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="gold">
+    <string name="filepath" value="F:\vita_skola\mitsubaTestFiles\mifFiles\MAM2014_011.mif"/>
+    <boolean name="memory" value="true"/>
+    <string name="cubemap_path" value="F:\vita_skola\mitsuba\build\dist\cubemaps\081\0256"/>
+    <float name="scale" value ="400.0"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="basket">
+    <string name="filepath" value="F:\vita_skola\mitsubaTestFiles\mifFiles\MAM2014_016.mif"/>
+    <boolean name="memory" value="true"/>
+    <string name="cubemap_path" value="F:\vita_skola\mitsuba\build\dist\cubemaps\081\0256"/>
+    <float name="scale" value ="400.0"/>
+    <string name="filtering" value="ANIZO_4x"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="ace">
+    <string name="filepath" value="F:\vita_skola\mitsubaTestFiles\mifFiles\ace001.mif"/>
+    <boolean name="memory" value="true"/>
+    <string name="cubemap_path" value="F:\vita_skola\mitsuba\build\dist\cubemaps\081\0256"/>
+    <float name="scale" value ="400.0"/>
+    <string name="filtering" value="none"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="chameleon">
+    <string name="filepath" value="f:\vita_skola\mitsubatestfiles\mifFiles\schlenk075_BTFthph.mif"/>
+    <boolean name="memory" value="true"/>
+    <float name="scale" value ="400.0"/>
+    <string name="filtering" value="ANIZO_4x"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="chameleon2">
+    <string name="filepath" value="f:\vita_skola\mitsubatestfiles\mifFiles\schlenk075_BTFthtd.mif"/>
+    <boolean name="memory" value="true"/>
+    <float name="scale" value ="7.0"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="silver">
+    <string name="filepath" value="f:\vita_skola\mitsubatestfiles\mifFiles\schlenk082_BTFthph.mif"/>
+    <boolean name="memory" value="true"/>
+    <float name="scale" value ="400.0"/>
+    <string name="filtering" value="ANIZO_4x"/>
+  </bsdf>
+  <bsdf type="bigbtf" id="silver2">
+    <string name="filepath" value="f:\vita_skola\mitsubatestfiles\mifFiles\schlenk082_BTFthtd.mif"/>
+    <boolean name="memory" value="true"/>
+    <float name="scale" value ="7.0"/>
+  </bsdf>
+<!--checkboard-->
+  <bsdf type="diffuse">
+    <texture name="reflectance" type="checkerboard">
+      <transform name="to_uv">
+        <scale x="100" y="100" />
+      </transform>
+    </texture>
+  </bsdf>
+
+</scene>

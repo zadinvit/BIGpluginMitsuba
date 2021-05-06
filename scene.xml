@@ -1,15 +1,15 @@
 <scene version="2.1.0">
 
   <!-- Defaults, these can be set via the command line: -Darg=value -->
-
-  <default name="spp" value="2"/>
-  <default name="resx" value="1280"/>
-  <default name="resy" value="720"/>
+  <path value="../../mitsubaTestFiles"/>
+  <default name="spp" value="32"/>
+  <default name="resx" value="1920"/>
+  <default name="resy" value="1080"/>
 
   <!-- Camera and Rendering Parameters -->
 
   <integrator type="path">
-    <integer name="max_depth" value="2"/>
+    <integer name="max_depth" value="8"/>
   </integrator>
   <!-- <integrator type="direct">
     <integer name="emitter_samples" value="1"/>
@@ -31,6 +31,7 @@
       <integer name="sample_count" value="$spp"/>
     </sampler>
     <film type="hdrfilm">
+      <string name="pixel_format" value="rgb"/>
       <integer name="width" value="$resx"/>
       <integer name="height" value="$resy"/>
     </film>
@@ -52,8 +53,10 @@
 
   <shape type="ply">
     <string name="filename" value="meshes\Sphere.ply"/>
-    <bsdf type="bigbtf">
-      <string name="big_filepath" value="bigFiles/fabric106_uniform_V2.big"/>
+    <bsdf type="bigbtf" id="uniform">
+      <string name="filepath" value="f:\vita_skola\DPCD\mitsubaTestFiles\mifFiles\schlenk075_BTFthph.mif"/>
+      <boolean name="memory" value="true"/>
+      <float name="scale" value ="7.0"/>
     </bsdf>
   </shape>
   <shape type="ply">
