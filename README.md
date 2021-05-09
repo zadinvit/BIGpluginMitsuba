@@ -10,7 +10,7 @@ This plugin is part of my diploma thesis "Visualization of advanced material app
  5. Use Cmake to generate new Mitsuba.sln, in solution go to folder plugins/bsdfs/bigbtf, there are bigbtf project files
 	 5.1. In bigbtf project you need set path to directories which stores MIFlib and PNGlib (in bigplugin folder). So in Linker->General->Additional Library Directories add the path to MIFlib 
 	 5.2 In Linker->Input->Additional Dependencies add "MIFlib.lib;PNGlib.lib"
-	 5.3 In bigbtf-obj project go to properties C/C++->General->Additional Include Directories and add the path to MIFlib\include and path to folder with bigbtf plugin include directory, you can add the path to plugin in mitsuba path_to_mitsuba\mitsuba\src\bsdfs\bigplugin\include
+	 5.3 In bigbtf-obj project go to properties C/C++->General->Additional Include Directories and add the path to MIFlib\include and path to folder with bigbtf plugin include directory, you can add the path to plugin in mitsuba path_to_mitsuba\mitsuba\src\bsdfs\bigplugin\ext\include
  6. Now you can build mitsuba INSTALL project and now you have mitsuba with bigbtf plugin, or you can build only bigbtf plugin and go to build/src/bsdfs/release and copy bigbtf.dll to dist/plugins, this work too and you don't need to reinstall whole Mitsuba
 
 **Use**

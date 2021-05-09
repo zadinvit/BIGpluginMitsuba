@@ -15,9 +15,8 @@
 #include <math.h>
 #include "big_core_read.hpp"
 //include cubemaps indexing class provide by Jiri Filip
-#include "TCubeMap.cpp"
+#include "ext/TCubeMap.cpp"
 #include "MIFbtf.hpp"
-#include "pugixml.hpp"
 using namespace mif;
 
 enum class Distribution { uniform, UBO, BTFthtd, BTFthph, none };
